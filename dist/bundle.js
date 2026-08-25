@@ -451,38 +451,6 @@
   };
   __publicField(SecuritySaveManager, "SECRET_KEY", "OMNIQUEST_HMAC_SECURE_KEY");
 
-  // src/gameplay/CombatCalculator.ts
-  var CombatCalculator = class {
-    static calculateDamage(attacker, defender, element = "physical") {
-      const isCrit = Math.random() < attacker.critChance;
-      let rawDamage = attacker.attack * (isCrit ? attacker.critMultiplier : 1);
-      let armor = defender.defense;
-      if (element === "fire") armor += defender.fireResist * 0.5;
-      if (element === "frost") armor += defender.frostResist * 0.5;
-      const mitigationRatio = 100 / (100 + Math.max(0, armor));
-      const finalDamage = Math.max(1, Math.round(rawDamage * mitigationRatio));
-      const mitigated = Math.round(rawDamage - finalDamage);
-      return { finalDamage, isCrit, mitigated };
-    }
-    static processStatusQueue(effects, dt) {
-      let damageOverTime = 0;
-      let stunActive = false;
-      for (let i = effects.length - 1; i >= 0; i--) {
-        const effect = effects[i];
-        effect.duration -= dt;
-        if (effect.type === "poison" || effect.type === "burn") {
-          damageOverTime += effect.potency * dt;
-        } else if (effect.type === "stun") {
-          stunActive = true;
-        }
-        if (effect.duration <= 0) {
-          effects.splice(i, 1);
-        }
-      }
-      return { damageOverTime: Math.round(damageOverTime), stunActive };
-    }
-  };
-
   // src/index.ts
   console.log("--- Omniquest: Realm of Shadows Engine ---");
   var AAAFullGameApp = class {
@@ -512,6 +480,14 @@
       __publicField(this, "enemies", []);
       __publicField(this, "floatingTexts", []);
       __publicField(this, "audioMuted", false);
+      __publicField(this, "screenShake", 0);
+      // Hero Powers (1, 2, 3, 4)
+      __publicField(this, "heroSkills", [
+        { id: "skill_1", name: "Primary Strike", icon: "\u2694\uFE0F", hotkey: "1", cooldown: 0, maxCooldown: 0.5, manaCost: 5 },
+        { id: "skill_2", name: "Whirlwind / Nova", icon: "\u{1F300}", hotkey: "2", cooldown: 0, maxCooldown: 3, manaCost: 25 },
+        { id: "skill_3", name: "Shield / Barrier", icon: "\u{1F6E1}\uFE0F", hotkey: "3", cooldown: 0, maxCooldown: 6, manaCost: 30 },
+        { id: "skill_4", name: "ULTIMATE METEOR", icon: "\u{1F31F}", hotkey: "4", cooldown: 0, maxCooldown: 12, manaCost: 50 }
+      ]);
       if (typeof document === "undefined") return;
       this.canvas = document.getElementById("gameCanvas");
       if (!this.canvas) return;
@@ -538,6 +514,9 @@
         color,
         life: 1.2
       });
+    }
+    triggerScreenShake(intensity) {
+      this.screenShake = intensity;
     }
     showScreen(screenId) {
       document.querySelectorAll(".overlay-screen").forEach((s) => s.classList.remove("visible"));
@@ -645,6 +624,7 @@
       window.loadSavedGame = () => this.loadSavedGame();
       window.toggleAudio = () => this.toggleAudio();
       window.showToast = (msg) => this.showToast(msg);
+      window.castSkill = (idx) => this.castHeroSkill(idx);
     }
     spawnEntitiesAndPowerups() {
       this.enemies = [];
@@ -665,7 +645,8 @@
           maxHp: def.maxHp,
           name: def.name,
           color: colors[i % colors.length],
-          speed: def.speed
+          speed: def.speed,
+          attackCooldown: 0
         });
         const types = ["health", "mana", "gold", "speed", "shield"];
         const pType = types[i % types.length];
@@ -683,9 +664,13 @@
     setupInputs() {
       window.addEventListener("keydown", (e) => {
         this.keys.add(e.key.toLowerCase());
+        if (e.key === "1") this.castHeroSkill(0);
+        if (e.key === "2") this.castHeroSkill(1);
+        if (e.key === "3") this.castHeroSkill(2);
+        if (e.key === "4") this.castHeroSkill(3);
         if (e.key === " ") {
           if (this.stateEngine.getState() === "Exploring" || this.stateEngine.getState() === "InCombat") {
-            this.playerAttack();
+            this.castHeroSkill(0);
           }
         }
         if (e.key === "i" || e.key === "I") this.toggleModal("screen-inventory");
@@ -698,36 +683,57 @@
       });
       this.canvas.addEventListener("click", (e) => {
         if (this.stateEngine.getState() !== "Exploring" && this.stateEngine.getState() !== "InCombat") return;
-        const rect = this.canvas.getBoundingClientRect();
-        const clickPos = new Vector2D(e.clientX - rect.left, e.clientY - rect.top);
-        this.particles.emit(clickPos, 30, "#f59e0b");
-        if (!this.audioMuted) this.audio.playSwordSwing();
+        this.castHeroSkill(0);
       });
     }
-    playerAttack() {
-      if (!this.audioMuted) this.audio.playSwordSwing();
-      this.particles.emit(this.playerPos, 40, "#ef4444");
-      const attackerStats = {
-        attack: this.selectedClass === "Mage" ? 35 : this.selectedClass === "Rogue" ? 28 : 24,
-        defense: 8,
-        critChance: this.selectedClass === "Rogue" ? 0.35 : 0.15,
-        critMultiplier: 1.8,
-        fireResist: 5,
-        frostResist: 5
-      };
-      let hitAny = false;
+    // Hero Power Casting Logic for 1, 2, 3, 4
+    castHeroSkill(index) {
+      if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
+      const skill = this.heroSkills[index];
+      if (!skill || skill.cooldown > 0) return;
+      if (this.playerResource < skill.manaCost) {
+        this.showToast("\u26A0\uFE0F Low Energy! Need " + skill.manaCost + " Energy.");
+        return;
+      }
+      this.playerResource -= skill.manaCost;
+      skill.cooldown = skill.maxCooldown;
+      if (index === 0) {
+        if (!this.audioMuted) this.audio.playSwordSwing();
+        this.particles.emit(this.playerPos, 30, "#38bdf8");
+        this.dealAreaDamage(100, 30, false);
+      } else if (index === 1) {
+        if (!this.audioMuted) this.audio.playExplosion();
+        this.particles.emit(this.playerPos, 60, "#a855f7");
+        this.triggerScreenShake(8);
+        this.dealAreaDamage(180, 65, true);
+        this.showToast("\u{1F300} Whirlwind Nova Triggered!");
+      } else if (index === 2) {
+        if (!this.audioMuted) this.audio.playPickup();
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 40);
+        this.particles.emit(this.playerPos, 50, "#10b981");
+        this.addFloatingText("+40 HP SHIELD \u{1F6E1}\uFE0F", this.playerPos, "#10b981");
+        this.showToast("\u{1F6E1}\uFE0F Shield Wall Activated! +40 HP Shield");
+      } else if (index === 3) {
+        if (!this.audioMuted) this.audio.playExplosion();
+        this.triggerScreenShake(20);
+        this.enemies.forEach((e) => {
+          e.hp -= 120;
+          this.addFloatingText("\u{1F4A5} METEOR 120", e.pos, "#f59e0b");
+          this.particles.emit(e.pos, 40, "#f59e0b");
+        });
+        this.showToast("\u{1F31F} ULTIMATE METEOR STRIKE CLEARED THE DUNGEON!");
+      }
+    }
+    dealAreaDamage(radius, damageAmount, isSpecial) {
       this.enemies.forEach((enemy, idx) => {
-        if (enemy.pos.distance(this.playerPos) < 95) {
-          hitAny = true;
-          const defenderStats = { attack: 10, defense: 4, critChance: 0.05, critMultiplier: 1.2, fireResist: 0, frostResist: 0 };
-          const result = CombatCalculator.calculateDamage(attackerStats, defenderStats);
-          enemy.hp -= result.finalDamage;
+        if (enemy.pos.distance(this.playerPos) < radius) {
+          enemy.hp -= damageAmount;
           this.addFloatingText(
-            result.isCrit ? "\u{1F4A5} CRIT " + result.finalDamage : "-" + result.finalDamage,
+            isSpecial ? "\u{1F4A5} " + damageAmount : "-" + damageAmount,
             enemy.pos,
-            result.isCrit ? "#fbbf24" : "#ef4444"
+            isSpecial ? "#a855f7" : "#ef4444"
           );
-          this.particles.emit(enemy.pos, 20, result.isCrit ? "#fbbf24" : "#ef4444");
+          this.particles.emit(enemy.pos, 20, "#ef4444");
           if (enemy.hp <= 0) {
             if (!this.audioMuted) this.audio.playExplosion();
             this.quests.onKillEnemy("enemy");
@@ -746,12 +752,17 @@
           }
         }
       });
-      if (hitAny) {
-        this.stateEngine.setState("InCombat");
-      }
     }
     update(dt) {
       if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
+      this.heroSkills.forEach((s) => {
+        if (s.cooldown > 0) {
+          s.cooldown = Math.max(0, s.cooldown - dt);
+        }
+      });
+      if (this.screenShake > 0) {
+        this.screenShake = Math.max(0, this.screenShake - 30 * dt);
+      }
       const speed = this.selectedClass === "Rogue" ? 220 : 180;
       this.playerVel.zero();
       if (this.keys.has("w") || this.keys.has("arrowup")) this.playerVel.y -= 1;
@@ -765,6 +776,29 @@
           this.particles.emit(this.playerPos, 2, "#38bdf8");
         }
       }
+      this.enemies.forEach((enemy) => {
+        if (enemy.attackCooldown > 0) {
+          enemy.attackCooldown -= dt;
+        }
+        const distToPlayer = enemy.pos.distance(this.playerPos);
+        if (distToPlayer < 320 && distToPlayer > 28) {
+          const dir = this.playerPos.clone().sub(enemy.pos).normalize();
+          enemy.pos.addScaled(dir, enemy.speed * 0.65 * dt);
+        }
+        if (distToPlayer < 35 && enemy.attackCooldown <= 0) {
+          enemy.attackCooldown = 1.2;
+          const damageDealt = 12;
+          this.playerHp = Math.max(0, this.playerHp - damageDealt);
+          this.addFloatingText("-12 HP \u{1F494}", this.playerPos, "#ef4444");
+          this.particles.emit(this.playerPos, 15, "#ef4444");
+          this.triggerScreenShake(6);
+          if (this.playerHp <= 0) {
+            this.showToast("\u{1F480} YOU DIED! Respawning in dungeon...");
+            this.playerHp = this.playerMaxHp;
+            this.playerPos.set(200, 200);
+          }
+        }
+      });
       for (let i = this.powerups.length - 1; i >= 0; i--) {
         const p = this.powerups[i];
         p.pulseTimer += dt;
@@ -803,8 +837,10 @@
       this.ctx.fillRect(0, 0, width, height);
       if (this.stateEngine.getState() === "MainMenu") return;
       this.ctx.save();
-      const camX = width / 2 - this.playerPos.x;
-      const camY = height / 2 - this.playerPos.y;
+      let shakeX = (Math.random() - 0.5) * this.screenShake;
+      let shakeY = (Math.random() - 0.5) * this.screenShake;
+      const camX = width / 2 - this.playerPos.x + shakeX;
+      const camY = height / 2 - this.playerPos.y + shakeY;
       this.ctx.translate(camX, camY);
       const tileSize = 32;
       const grid = this.dungeonData.grid;
@@ -878,33 +914,34 @@
       this.renderHUD(width, height);
     }
     renderHUD(width, height) {
-      this.ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-      this.ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
+      const hudY = 75;
+      this.ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      this.ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
       this.ctx.lineWidth = 2;
-      this.ctx.fillRect(20, 20, 360, 95);
-      this.ctx.strokeRect(20, 20, 360, 95);
-      this.ctx.font = "bold 16px Inter";
+      this.ctx.fillRect(20, hudY, 360, 95);
+      this.ctx.strokeRect(20, hudY, 360, 95);
+      this.ctx.font = "bold 15px Inter";
       this.ctx.fillStyle = "#38bdf8";
-      this.ctx.fillText("HERO: " + this.selectedClass.toUpperCase() + " (Lvl " + this.level + ")", 35, 45);
+      this.ctx.fillText("HERO: " + this.selectedClass.toUpperCase() + " (Lvl " + this.level + ")", 35, hudY + 25);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      this.ctx.fillRect(35, 55, 220, 16);
+      this.ctx.fillRect(35, hudY + 35, 220, 16);
       this.ctx.fillStyle = "#ef4444";
-      this.ctx.fillRect(35, 55, this.playerHp / this.playerMaxHp * 220, 16);
+      this.ctx.fillRect(35, hudY + 35, this.playerHp / this.playerMaxHp * 220, 16);
       this.ctx.font = "bold 11px Inter";
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 45, 67);
+      this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 45, hudY + 47);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      this.ctx.fillRect(35, 76, 220, 14);
+      this.ctx.fillRect(35, hudY + 56, 220, 14);
       this.ctx.fillStyle = "#3b82f6";
-      this.ctx.fillRect(35, 76, this.playerResource / this.playerMaxResource * 220, 14);
+      this.ctx.fillRect(35, hudY + 56, this.playerResource / this.playerMaxResource * 220, 14);
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 45, 87);
+      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 45, hudY + 67);
       this.ctx.font = "bold 14px Inter";
       this.ctx.fillStyle = "#fbbf24";
-      this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 270, 70);
+      this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 270, hudY + 50);
       const mmSize = 120;
       const mmX = width - mmSize - 20;
-      const mmY = 20;
+      const mmY = 75;
       this.ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
       this.ctx.fillRect(mmX, mmY, mmSize, mmSize);
       this.ctx.strokeRect(mmX, mmY, mmSize, mmSize);
@@ -917,6 +954,29 @@
         6,
         6
       );
+      const barWidth = 340;
+      const barX = width / 2 - barWidth / 2;
+      const barY = height - 70;
+      this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+      this.ctx.fillRect(barX, barY, barWidth, 55);
+      this.ctx.strokeRect(barX, barY, barWidth, 55);
+      for (let i = 0; i < 4; i++) {
+        const skill = this.heroSkills[i];
+        const slotX = barX + 15 + i * 80;
+        const slotY = barY + 8;
+        this.ctx.fillStyle = skill.cooldown > 0 ? "rgba(30, 41, 59, 0.6)" : "rgba(30, 41, 59, 0.95)";
+        this.ctx.fillRect(slotX, slotY, 70, 40);
+        this.ctx.strokeStyle = skill.cooldown > 0 ? "#475569" : "#38bdf8";
+        this.ctx.strokeRect(slotX, slotY, 70, 40);
+        this.ctx.font = "16px Inter";
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.fillText(skill.icon + " (" + skill.hotkey + ")", slotX + 10, slotY + 24);
+        if (skill.cooldown > 0) {
+          this.ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
+          this.ctx.font = "bold 12px Inter";
+          this.ctx.fillText(skill.cooldown.toFixed(1) + "s", slotX + 22, slotY + 24);
+        }
+      }
     }
     startLoop() {
       let lastTime = performance.now();
