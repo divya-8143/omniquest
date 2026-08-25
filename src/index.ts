@@ -19,8 +19,6 @@ class BrowserGameApp {
   private playerMaxHp = 100;
   private playerMana = 80;
   private playerMaxMana = 100;
-  private playerXp = 450;
-  private playerMaxXp = 1000;
   private gold = 350;
   private level = 5;
 
@@ -122,13 +120,11 @@ class BrowserGameApp {
       this.playerVel.normalize().scale(speed * dt);
       this.playerPos.add(this.playerVel);
 
-      // Trail particles
       if (Math.random() < 0.3) {
         this.particles.emit(this.playerPos, 2, '#38bdf8');
       }
     }
 
-    // Environmental fireflies
     if (Math.random() < 0.05) {
       const randomPos = new Vector2D(
         this.playerPos.x + (Math.random() - 0.5) * 600,
@@ -228,24 +224,23 @@ class BrowserGameApp {
 
     this.ctx.restore();
 
-    // --- Overlay UI (HUD) ---
+    // Overlay UI
     this.renderHUD(width, height);
   }
 
   private renderHUD(width: number, height: number): void {
-    // Glassmorphism HUD Frame
+    // HUD Frame
     this.ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
     this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
     this.ctx.lineWidth = 2;
 
-    // Top Left Header Box
     this.ctx.fillRect(20, 20, 360, 95);
     this.ctx.strokeRect(20, 20, 360, 95);
 
     // Title & Level
     this.ctx.font = 'bold 18px Segoe UI';
     this.ctx.fillStyle = '#38bdf8';
-    this.ctx.fillText(\`OMNIQUEST - Lvl \${this.level} Hero\`, 35, 45);
+    this.ctx.fillText('OMNIQUEST - Lvl ' + this.level + ' Hero', 35, 45);
 
     // Health Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -254,7 +249,7 @@ class BrowserGameApp {
     this.ctx.fillRect(35, 55, (this.playerHp / this.playerMaxHp) * 220, 16);
     this.ctx.font = 'bold 11px Segoe UI';
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText(\`HP: \${this.playerHp} / \${this.playerMaxHp}\`, 45, 67);
+    this.ctx.fillText('HP: ' + this.playerHp + ' / ' + this.playerMaxHp, 45, 67);
 
     // Mana Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -262,14 +257,14 @@ class BrowserGameApp {
     this.ctx.fillStyle = '#3b82f6';
     this.ctx.fillRect(35, 76, (this.playerMana / this.playerMaxMana) * 220, 14);
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText(\`Mana: \${this.playerMana} / \${this.playerMaxMana}\`, 45, 87);
+    this.ctx.fillText('Mana: ' + this.playerMana + ' / ' + this.playerMaxMana, 45, 87);
 
-    // Gold & Stats
+    // Gold
     this.ctx.font = 'bold 14px Segoe UI';
     this.ctx.fillStyle = '#fbbf24';
-    this.ctx.fillText(\`💰 \${this.gold} Gold\`, 270, 70);
+    this.ctx.fillText('💰 ' + this.gold + ' Gold', 270, 70);
 
-    // Minimap (Top Right)
+    // Minimap
     const mmSize = 120;
     const mmX = width - mmSize - 20;
     const mmY = 20;
@@ -277,7 +272,6 @@ class BrowserGameApp {
     this.ctx.fillRect(mmX, mmY, mmSize, mmSize);
     this.ctx.strokeRect(mmX, mmY, mmSize, mmSize);
 
-    // Draw minimap rooms
     const scaleX = mmSize / (this.dungeonGen.width * 32);
     const scaleY = mmSize / (this.dungeonGen.height * 32);
     this.ctx.fillStyle = '#38bdf8';
@@ -313,7 +307,6 @@ class BrowserGameApp {
   }
 }
 
-// Auto init on DOM ready
 if (typeof document !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {
     new BrowserGameApp();
