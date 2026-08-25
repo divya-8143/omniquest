@@ -5,7 +5,7 @@ import { AudioSynthesizer } from './audio/AudioSynthesizer';
 import { SkillTreeMatrix } from './gameplay/SkillTreeMatrix';
 import { QuestManager } from './gameplay/QuestManager';
 import { EnemyBestiary } from './gameplay/EnemyDefinitions';
-import { GlobalStateEngine, GlobalGameState } from './core/StateEngine';
+import { GlobalStateEngine } from './core/StateEngine';
 import { ClassSystem, CharacterClass } from './gameplay/ClassSystem';
 import { SecuritySaveManager } from './storage/SecuritySaveManager';
 import { CombatCalculator, EntityCombatStats } from './gameplay/CombatCalculator';
@@ -28,11 +28,11 @@ class AAAFullGameApp {
   private dungeonGen = new DungeonGenerator(45, 45);
   private dungeonData!: { grid: number[][]; rooms: any[] };
 
-  private selectedClass: CharacterClass = 'Warrior';
+  public selectedClass: CharacterClass = 'Warrior';
   private playerPos = new Vector2D(200, 200);
   private playerVel = new Vector2D();
-  private playerHp = 120;
-  private playerMaxHp = 120;
+  private playerHp = 140;
+  private playerMaxHp = 140;
   private playerResource = 100;
   private playerMaxResource = 100;
   private gold = 150;
@@ -49,7 +49,7 @@ class AAAFullGameApp {
   private enemies: Array<{ pos: Vector2D; hp: number; maxHp: number; name: string; color: string; speed: number }> = [];
 
   private floatingTexts: Array<{ text: string; pos: Vector2D; color: string; life: number }> = [];
-  private audioMuted: boolean = false;
+  public audioMuted: boolean = false;
 
   constructor() {
     if (typeof document === 'undefined') return;
@@ -59,12 +59,12 @@ class AAAFullGameApp {
     this.ctx = this.canvas.getContext('2d')!;
 
     this.dungeonData = this.dungeonGen.generate();
-    this.setupUIHandlers();
+    this.bindWindowGlobals();
     this.setupInputs();
     this.startLoop();
   }
 
-  private showToast(message: string): void {
+  public showToast(message: string): void {
     const container = document.getElementById('toast-container');
     if (!container) return;
     const toast = document.createElement('div');
@@ -74,7 +74,7 @@ class AAAFullGameApp {
     setTimeout(() => toast.remove(), 3500);
   }
 
-  private addFloatingText(text: string, pos: Vector2D, color: string = '#ffffff'): void {
+  public addFloatingText(text: string, pos: Vector2D, color: string = '#ffffff'): void {
     this.floatingTexts.push({
       text,
       pos: pos.clone(),
@@ -83,104 +83,20 @@ class AAAFullGameApp {
     });
   }
 
-  private setupUIHandlers(): void {
-    // Navigation bar handlers
-    const btnPause = document.getElementById('btn-nav-pause');
-    const btnInventory = document.getElementById('btn-nav-inventory');
-    const btnSkills = document.getElementById('btn-nav-skills');
-    const btnQuests = document.getElementById('btn-nav-quests');
-    const btnSave = document.getElementById('btn-nav-save');
-    const btnAudio = document.getElementById('btn-nav-audio');
-
-    if (btnPause) {
-      btnPause.onclick = () => this.togglePause();
-    }
-    if (btnInventory) {
-      btnInventory.onclick = () => this.toggleModal('screen-inventory');
-    }
-    if (btnSkills) {
-      btnSkills.onclick = () => this.toggleModal('screen-skill-tree');
-    }
-    if (btnQuests) {
-      btnQuests.onclick = () => this.toggleModal('screen-quest-log');
-    }
-    if (btnSave) {
-      btnSave.onclick = () => {
-        SecuritySaveManager.saveGame('quick_save', {
-          slotId: 'quick_save',
-          timestamp: Date.now(),
-          playerLevel: this.level,
-          characterClass: this.selectedClass,
-          gold: this.gold,
-          inventory: [],
-          completedQuests: [],
-          worldFlags: []
-        });
-        this.showToast('💾 Game Saved Successfully with HMAC Verification!');
-      };
-    }
-    if (btnAudio) {
-      btnAudio.onclick = () => {
-        this.audioMuted = !this.audioMuted;
-        btnAudio.innerText = this.audioMuted ? '🔇 Audio OFF' : '🔊 Audio ON';
-        this.showToast(this.audioMuted ? 'Audio Muted' : 'Audio Enabled');
-      };
-    }
-
-    // Main Menu Start Button
-    const btnStart = document.getElementById('btn-menu-start');
-    if (btnStart) {
-      btnStart.onclick = () => {
-        this.switchScreen('screen-class-select');
-      };
-    }
-
-    // Class selection card clicks
-    const cards = document.querySelectorAll('.class-card');
-    cards.forEach(card => {
-      card.addEventListener('click', () => {
-        cards.forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        this.selectedClass = (card.getAttribute('data-class') as CharacterClass) || 'Warrior';
-      });
-    });
-
-    // Confirm Class button
-    const btnConfirmClass = document.getElementById('btn-confirm-class');
-    if (btnConfirmClass) {
-      btnConfirmClass.onclick = () => {
-        this.initGameForSelectedClass();
-        this.hideAllScreens();
-        this.stateEngine.setState('Exploring');
-        this.showToast('⚔️ Entered Dungeon as ' + this.selectedClass + '!');
-      };
-    }
-
-    // Modal closes
-    document.getElementById('btn-close-pause')?.addEventListener('click', () => this.resumeGame());
-    document.getElementById('btn-pause-resume')?.addEventListener('click', () => this.resumeGame());
-    document.getElementById('btn-close-inventory')?.addEventListener('click', () => this.hideModal('screen-inventory'));
-    document.getElementById('btn-close-skills')?.addEventListener('click', () => this.hideModal('screen-skill-tree'));
-    document.getElementById('btn-close-quests')?.addEventListener('click', () => this.hideModal('screen-quest-log'));
-
-    document.getElementById('btn-pause-mainmenu')?.addEventListener('click', () => {
-      this.hideAllScreens();
-      this.switchScreen('screen-main-menu');
-      this.stateEngine.setState('MainMenu');
-    });
-  }
-
-  private switchScreen(screenId: string): void {
+  public showScreen(screenId: string): void {
     document.querySelectorAll('.overlay-screen').forEach(s => s.classList.remove('visible'));
     const target = document.getElementById(screenId);
     if (target) target.classList.add('visible');
+    if (screenId === 'screen-main-menu') {
+      this.stateEngine.setState('MainMenu');
+    }
   }
 
-  private hideAllScreens(): void {
+  public hideAllScreens(): void {
     document.querySelectorAll('.overlay-screen').forEach(s => s.classList.remove('visible'));
   }
 
-  private toggleModal(modalId: string): void {
+  public toggleModal(modalId: string): void {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     if (modal.classList.contains('visible')) {
@@ -195,7 +111,7 @@ class AAAFullGameApp {
     }
   }
 
-  private hideModal(modalId: string): void {
+  public hideModal(modalId: string): void {
     const modal = document.getElementById(modalId);
     if (modal) modal.classList.remove('visible');
     if (this.stateEngine.getState() === 'Paused') {
@@ -203,21 +119,29 @@ class AAAFullGameApp {
     }
   }
 
-  private togglePause(): void {
+  public togglePause(): void {
     if (this.stateEngine.getState() === 'Paused') {
       this.resumeGame();
     } else {
-      this.switchScreen('screen-pause');
+      this.showScreen('screen-pause');
       this.stateEngine.setState('Paused');
     }
   }
 
-  private resumeGame(): void {
+  public resumeGame(): void {
     this.hideAllScreens();
     this.stateEngine.setState('Exploring');
   }
 
-  private initGameForSelectedClass(): void {
+  public selectClass(cls: CharacterClass): void {
+    this.selectedClass = cls;
+    document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+    const targetCard = document.getElementById('card-' + cls.toLowerCase());
+    if (targetCard) targetCard.classList.add('selected');
+    this.showToast('Selected Hero Class: ' + cls);
+  }
+
+  public startDungeonGame(): void {
     const classDef = ClassSystem.getClass(this.selectedClass);
     this.playerHp = classDef.className === 'Warrior' ? 140 : 100;
     this.playerMaxHp = this.playerHp;
@@ -225,6 +149,58 @@ class AAAFullGameApp {
     this.playerMaxResource = classDef.maxResource;
 
     this.spawnEntitiesAndPowerups();
+    this.hideAllScreens();
+    this.stateEngine.setState('Exploring');
+    this.showToast('⚔️ Entered Dungeon as ' + this.selectedClass + '!');
+  }
+
+  public quickSaveGame(): void {
+    SecuritySaveManager.saveGame('quick_save', {
+      slotId: 'quick_save',
+      timestamp: Date.now(),
+      playerLevel: this.level,
+      characterClass: this.selectedClass,
+      gold: this.gold,
+      inventory: [],
+      completedQuests: [],
+      worldFlags: []
+    });
+    this.showToast('💾 Game Saved with HMAC-SHA256 Encryption!');
+  }
+
+  public loadSavedGame(): void {
+    const data = SecuritySaveManager.loadGame('quick_save');
+    if (data) {
+      this.level = data.playerLevel;
+      this.selectedClass = data.characterClass as CharacterClass;
+      this.gold = data.gold;
+      this.startDungeonGame();
+      this.showToast('📂 Loaded Save Data for Level ' + this.level + ' ' + this.selectedClass);
+    } else {
+      this.showToast('⚠️ No Save Data Found! Starting New Game...');
+      this.showScreen('screen-class-select');
+    }
+  }
+
+  public toggleAudio(): void {
+    this.audioMuted = !this.audioMuted;
+    const btn = document.getElementById('btn-nav-audio');
+    if (btn) btn.innerText = this.audioMuted ? '🔇 Audio OFF' : '🔊 Audio ON';
+    this.showToast(this.audioMuted ? 'Audio Muted' : 'Audio Enabled');
+  }
+
+  private bindWindowGlobals(): void {
+    (window as any).showScreen = (id: string) => this.showScreen(id);
+    (window as any).selectClass = (cls: CharacterClass) => this.selectClass(cls);
+    (window as any).startDungeonGame = () => this.startDungeonGame();
+    (window as any).toggleModal = (id: string) => this.toggleModal(id);
+    (window as any).hideModal = (id: string) => this.hideModal(id);
+    (window as any).togglePause = () => this.togglePause();
+    (window as any).resumeGame = () => this.resumeGame();
+    (window as any).quickSaveGame = () => this.quickSaveGame();
+    (window as any).loadSavedGame = () => this.loadSavedGame();
+    (window as any).toggleAudio = () => this.toggleAudio();
+    (window as any).showToast = (msg: string) => this.showToast(msg);
   }
 
   private spawnEntitiesAndPowerups(): void {
@@ -244,7 +220,6 @@ class AAAFullGameApp {
       const def = enemyDefs[i % enemyDefs.length];
       const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
 
-      // Spawn Enemy
       this.enemies.push({
         pos: center.clone(),
         hp: def.maxHp,
@@ -254,7 +229,6 @@ class AAAFullGameApp {
         speed: def.speed
       });
 
-      // Spawn Powerup nearby
       const types: Array<'health' | 'mana' | 'gold' | 'speed' | 'shield'> = ['health', 'mana', 'gold', 'speed', 'shield'];
       const pType = types[i % types.length];
       const pColor = pType === 'health' ? '#ef4444' : pType === 'mana' ? '#3b82f6' : pType === 'gold' ? '#fbbf24' : '#10b981';
@@ -370,7 +344,7 @@ class AAAFullGameApp {
       }
     }
 
-    // Powerup Collision Check
+    // Powerup collision
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const p = this.powerups[i];
       p.pulseTimer += dt;
@@ -394,7 +368,7 @@ class AAAFullGameApp {
       }
     }
 
-    // Update Floating Texts
+    // Floating texts
     for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
       const ft = this.floatingTexts[i];
       ft.life -= dt;
@@ -411,19 +385,17 @@ class AAAFullGameApp {
     const width = this.canvas.width;
     const height = this.canvas.height;
 
-    // Clear Screen
     this.ctx.fillStyle = '#030712';
     this.ctx.fillRect(0, 0, width, height);
 
     if (this.stateEngine.getState() === 'MainMenu') return;
 
-    // Camera Transform
     this.ctx.save();
     const camX = width / 2 - this.playerPos.x;
     const camY = height / 2 - this.playerPos.y;
     this.ctx.translate(camX, camY);
 
-    // Render Dungeon Floor & Grid
+    // Dungeon floor
     const tileSize = 32;
     const grid = this.dungeonData.grid;
     for (let r = 0; r < grid.length; r++) {
@@ -442,7 +414,7 @@ class AAAFullGameApp {
       }
     }
 
-    // Render Powerups
+    // Powerups
     this.powerups.forEach(p => {
       const pulse = Math.sin(p.pulseTimer * 6) * 3;
       this.ctx.beginPath();
@@ -454,7 +426,7 @@ class AAAFullGameApp {
       this.ctx.shadowBlur = 0;
     });
 
-    // Render Enemies
+    // Enemies
     this.enemies.forEach(e => {
       this.ctx.beginPath();
       this.ctx.arc(e.pos.x, e.pos.y, 14, 0, Math.PI * 2);
@@ -464,7 +436,6 @@ class AAAFullGameApp {
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
 
-      // Enemy HP Bar
       this.ctx.font = '11px Inter';
       this.ctx.fillStyle = '#f87171';
       this.ctx.fillText(e.name, e.pos.x - 30, e.pos.y - 22);
@@ -474,7 +445,7 @@ class AAAFullGameApp {
       this.ctx.fillRect(e.pos.x - 20, e.pos.y - 18, (e.hp / e.maxHp) * 40, 5);
     });
 
-    // Render Particles
+    // Particles
     this.particles.getParticles().forEach(p => {
       this.ctx.beginPath();
       this.ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
@@ -485,7 +456,7 @@ class AAAFullGameApp {
       this.ctx.shadowBlur = 0;
     });
 
-    // Render Player Avatar
+    // Player Avatar
     const pColor = this.selectedClass === 'Warrior' ? '#ef4444' : this.selectedClass === 'Mage' ? '#a855f7' : '#38bdf8';
     this.ctx.beginPath();
     this.ctx.arc(this.playerPos.x, this.playerPos.y, 16, 0, Math.PI * 2);
@@ -498,7 +469,7 @@ class AAAFullGameApp {
     this.ctx.stroke();
     this.ctx.shadowBlur = 0;
 
-    // Floating Texts
+    // Floating text
     this.floatingTexts.forEach(ft => {
       this.ctx.font = 'bold 14px Inter';
       this.ctx.fillStyle = ft.color;
@@ -507,7 +478,6 @@ class AAAFullGameApp {
 
     this.ctx.restore();
 
-    // Render In-Game HUD Overlay
     this.renderHUD(width, height);
   }
 
@@ -519,12 +489,10 @@ class AAAFullGameApp {
     this.ctx.fillRect(20, 20, 360, 95);
     this.ctx.strokeRect(20, 20, 360, 95);
 
-    // Title & Level
     this.ctx.font = 'bold 16px Inter';
     this.ctx.fillStyle = '#38bdf8';
     this.ctx.fillText('HERO: ' + this.selectedClass.toUpperCase() + ' (Lvl ' + this.level + ')', 35, 45);
 
-    // Health Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     this.ctx.fillRect(35, 55, 220, 16);
     this.ctx.fillStyle = '#ef4444';
@@ -533,7 +501,6 @@ class AAAFullGameApp {
     this.ctx.fillStyle = '#ffffff';
     this.ctx.fillText('HP: ' + this.playerHp + ' / ' + this.playerMaxHp, 45, 67);
 
-    // Resource Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     this.ctx.fillRect(35, 76, 220, 14);
     this.ctx.fillStyle = '#3b82f6';
@@ -541,12 +508,10 @@ class AAAFullGameApp {
     this.ctx.fillStyle = '#ffffff';
     this.ctx.fillText('ENERGY: ' + this.playerResource + ' / ' + this.playerMaxResource, 45, 87);
 
-    // Gold
     this.ctx.font = 'bold 14px Inter';
     this.ctx.fillStyle = '#fbbf24';
     this.ctx.fillText('💰 ' + this.gold + ' Gold', 270, 70);
 
-    // Minimap
     const mmSize = 120;
     const mmX = width - mmSize - 20;
     const mmY = 20;

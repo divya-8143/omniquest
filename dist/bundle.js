@@ -495,8 +495,8 @@
       __publicField(this, "selectedClass", "Warrior");
       __publicField(this, "playerPos", new Vector2D(200, 200));
       __publicField(this, "playerVel", new Vector2D());
-      __publicField(this, "playerHp", 120);
-      __publicField(this, "playerMaxHp", 120);
+      __publicField(this, "playerHp", 140);
+      __publicField(this, "playerMaxHp", 140);
       __publicField(this, "playerResource", 100);
       __publicField(this, "playerMaxResource", 100);
       __publicField(this, "gold", 150);
@@ -517,7 +517,7 @@
       if (!this.canvas) return;
       this.ctx = this.canvas.getContext("2d");
       this.dungeonData = this.dungeonGen.generate();
-      this.setupUIHandlers();
+      this.bindWindowGlobals();
       this.setupInputs();
       this.startLoop();
     }
@@ -538,85 +538,13 @@
         life: 1.2
       });
     }
-    setupUIHandlers() {
-      const btnPause = document.getElementById("btn-nav-pause");
-      const btnInventory = document.getElementById("btn-nav-inventory");
-      const btnSkills = document.getElementById("btn-nav-skills");
-      const btnQuests = document.getElementById("btn-nav-quests");
-      const btnSave = document.getElementById("btn-nav-save");
-      const btnAudio = document.getElementById("btn-nav-audio");
-      if (btnPause) {
-        btnPause.onclick = () => this.togglePause();
-      }
-      if (btnInventory) {
-        btnInventory.onclick = () => this.toggleModal("screen-inventory");
-      }
-      if (btnSkills) {
-        btnSkills.onclick = () => this.toggleModal("screen-skill-tree");
-      }
-      if (btnQuests) {
-        btnQuests.onclick = () => this.toggleModal("screen-quest-log");
-      }
-      if (btnSave) {
-        btnSave.onclick = () => {
-          SecuritySaveManager.saveGame("quick_save", {
-            slotId: "quick_save",
-            timestamp: Date.now(),
-            playerLevel: this.level,
-            characterClass: this.selectedClass,
-            gold: this.gold,
-            inventory: [],
-            completedQuests: [],
-            worldFlags: []
-          });
-          this.showToast("\u{1F4BE} Game Saved Successfully with HMAC Verification!");
-        };
-      }
-      if (btnAudio) {
-        btnAudio.onclick = () => {
-          this.audioMuted = !this.audioMuted;
-          btnAudio.innerText = this.audioMuted ? "\u{1F507} Audio OFF" : "\u{1F50A} Audio ON";
-          this.showToast(this.audioMuted ? "Audio Muted" : "Audio Enabled");
-        };
-      }
-      const btnStart = document.getElementById("btn-menu-start");
-      if (btnStart) {
-        btnStart.onclick = () => {
-          this.switchScreen("screen-class-select");
-        };
-      }
-      const cards = document.querySelectorAll(".class-card");
-      cards.forEach((card) => {
-        card.addEventListener("click", () => {
-          cards.forEach((c) => c.classList.remove("selected"));
-          card.classList.add("selected");
-          this.selectedClass = card.getAttribute("data-class") || "Warrior";
-        });
-      });
-      const btnConfirmClass = document.getElementById("btn-confirm-class");
-      if (btnConfirmClass) {
-        btnConfirmClass.onclick = () => {
-          this.initGameForSelectedClass();
-          this.hideAllScreens();
-          this.stateEngine.setState("Exploring");
-          this.showToast("\u2694\uFE0F Entered Dungeon as " + this.selectedClass + "!");
-        };
-      }
-      document.getElementById("btn-close-pause")?.addEventListener("click", () => this.resumeGame());
-      document.getElementById("btn-pause-resume")?.addEventListener("click", () => this.resumeGame());
-      document.getElementById("btn-close-inventory")?.addEventListener("click", () => this.hideModal("screen-inventory"));
-      document.getElementById("btn-close-skills")?.addEventListener("click", () => this.hideModal("screen-skill-tree"));
-      document.getElementById("btn-close-quests")?.addEventListener("click", () => this.hideModal("screen-quest-log"));
-      document.getElementById("btn-pause-mainmenu")?.addEventListener("click", () => {
-        this.hideAllScreens();
-        this.switchScreen("screen-main-menu");
-        this.stateEngine.setState("MainMenu");
-      });
-    }
-    switchScreen(screenId) {
+    showScreen(screenId) {
       document.querySelectorAll(".overlay-screen").forEach((s) => s.classList.remove("visible"));
       const target = document.getElementById(screenId);
       if (target) target.classList.add("visible");
+      if (screenId === "screen-main-menu") {
+        this.stateEngine.setState("MainMenu");
+      }
     }
     hideAllScreens() {
       document.querySelectorAll(".overlay-screen").forEach((s) => s.classList.remove("visible"));
@@ -646,7 +574,7 @@
       if (this.stateEngine.getState() === "Paused") {
         this.resumeGame();
       } else {
-        this.switchScreen("screen-pause");
+        this.showScreen("screen-pause");
         this.stateEngine.setState("Paused");
       }
     }
@@ -654,13 +582,68 @@
       this.hideAllScreens();
       this.stateEngine.setState("Exploring");
     }
-    initGameForSelectedClass() {
+    selectClass(cls) {
+      this.selectedClass = cls;
+      document.querySelectorAll(".class-card").forEach((c) => c.classList.remove("selected"));
+      const targetCard = document.getElementById("card-" + cls.toLowerCase());
+      if (targetCard) targetCard.classList.add("selected");
+      this.showToast("Selected Hero Class: " + cls);
+    }
+    startDungeonGame() {
       const classDef = ClassSystem.getClass(this.selectedClass);
       this.playerHp = classDef.className === "Warrior" ? 140 : 100;
       this.playerMaxHp = this.playerHp;
       this.playerResource = classDef.maxResource;
       this.playerMaxResource = classDef.maxResource;
       this.spawnEntitiesAndPowerups();
+      this.hideAllScreens();
+      this.stateEngine.setState("Exploring");
+      this.showToast("\u2694\uFE0F Entered Dungeon as " + this.selectedClass + "!");
+    }
+    quickSaveGame() {
+      SecuritySaveManager.saveGame("quick_save", {
+        slotId: "quick_save",
+        timestamp: Date.now(),
+        playerLevel: this.level,
+        characterClass: this.selectedClass,
+        gold: this.gold,
+        inventory: [],
+        completedQuests: [],
+        worldFlags: []
+      });
+      this.showToast("\u{1F4BE} Game Saved with HMAC-SHA256 Encryption!");
+    }
+    loadSavedGame() {
+      const data = SecuritySaveManager.loadGame("quick_save");
+      if (data) {
+        this.level = data.playerLevel;
+        this.selectedClass = data.characterClass;
+        this.gold = data.gold;
+        this.startDungeonGame();
+        this.showToast("\u{1F4C2} Loaded Save Data for Level " + this.level + " " + this.selectedClass);
+      } else {
+        this.showToast("\u26A0\uFE0F No Save Data Found! Starting New Game...");
+        this.showScreen("screen-class-select");
+      }
+    }
+    toggleAudio() {
+      this.audioMuted = !this.audioMuted;
+      const btn = document.getElementById("btn-nav-audio");
+      if (btn) btn.innerText = this.audioMuted ? "\u{1F507} Audio OFF" : "\u{1F50A} Audio ON";
+      this.showToast(this.audioMuted ? "Audio Muted" : "Audio Enabled");
+    }
+    bindWindowGlobals() {
+      window.showScreen = (id) => this.showScreen(id);
+      window.selectClass = (cls) => this.selectClass(cls);
+      window.startDungeonGame = () => this.startDungeonGame();
+      window.toggleModal = (id) => this.toggleModal(id);
+      window.hideModal = (id) => this.hideModal(id);
+      window.togglePause = () => this.togglePause();
+      window.resumeGame = () => this.resumeGame();
+      window.quickSaveGame = () => this.quickSaveGame();
+      window.loadSavedGame = () => this.loadSavedGame();
+      window.toggleAudio = () => this.toggleAudio();
+      window.showToast = (msg) => this.showToast(msg);
     }
     spawnEntitiesAndPowerups() {
       this.enemies = [];

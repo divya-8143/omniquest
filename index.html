@@ -92,12 +92,6 @@
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
     }
 
-    .nav-btn.active {
-      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-      border-color: #38bdf8;
-      color: #ffffff;
-    }
-
     /* Game Canvas Viewport */
     #viewport {
       position: relative;
@@ -120,21 +114,18 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5, 7, 12, 0.92);
+      background: rgba(5, 7, 12, 0.94);
       backdrop-filter: blur(16px);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       z-index: 200;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
+      display: none;
     }
 
     .overlay-screen.visible {
-      opacity: 1;
-      pointer-events: auto;
+      display: flex !important;
     }
 
     /* Main Title Screen */
@@ -150,7 +141,6 @@
       background: linear-gradient(135deg, #f0f9ff 0%, #38bdf8 50%, #c084fc 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      text-shadow: 0 0 40px rgba(56, 189, 248, 0.4);
       letter-spacing: 4px;
       margin-bottom: 12px;
     }
@@ -325,12 +315,6 @@
       font-size: 13px;
       font-weight: 600;
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-      animation: slideIn 0.3s ease forwards;
-    }
-
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
     }
   </style>
 </head>
@@ -342,12 +326,12 @@
         <span>⚔️</span> OMNIQUEST
       </div>
       <div class="nav-controls">
-        <button id="btn-nav-pause" class="nav-btn">⏸️ Pause</button>
-        <button id="btn-nav-inventory" class="nav-btn">🎒 Inventory (I)</button>
-        <button id="btn-nav-skills" class="nav-btn">✨ Skill Tree (K)</button>
-        <button id="btn-nav-quests" class="nav-btn">📜 Quests (Q)</button>
-        <button id="btn-nav-save" class="nav-btn">💾 Quick Save</button>
-        <button id="btn-nav-audio" class="nav-btn">🔊 Audio ON</button>
+        <button id="btn-nav-pause" onclick="window.togglePause()" class="nav-btn">⏸️ Pause</button>
+        <button id="btn-nav-inventory" onclick="window.toggleModal('screen-inventory')" class="nav-btn">🎒 Inventory (I)</button>
+        <button id="btn-nav-skills" onclick="window.toggleModal('screen-skill-tree')" class="nav-btn">✨ Skill Tree (K)</button>
+        <button id="btn-nav-quests" onclick="window.toggleModal('screen-quest-log')" class="nav-btn">📜 Quests (Q)</button>
+        <button id="btn-nav-save" onclick="window.quickSaveGame()" class="nav-btn">💾 Quick Save</button>
+        <button id="btn-nav-audio" onclick="window.toggleAudio()" class="nav-btn">🔊 Audio ON</button>
       </div>
     </header>
 
@@ -366,9 +350,9 @@
         <p>Realm of Shadows & Procedural Catacombs</p>
       </div>
       <div class="menu-button-group">
-        <button id="btn-menu-start" class="btn-primary">▶️ START NEW GAME</button>
-        <button id="btn-menu-load" class="btn-secondary">📂 LOAD SAVED GAME</button>
-        <button id="btn-menu-settings" class="btn-secondary">⚙️ OPTIONS & CONTROLS</button>
+        <button id="btn-menu-start" onclick="window.showScreen('screen-class-select')" class="btn-primary">▶️ START NEW GAME</button>
+        <button id="btn-menu-load" onclick="window.loadSavedGame()" class="btn-secondary">📂 LOAD SAVED GAME</button>
+        <button id="btn-menu-settings" onclick="window.showToast('WASD = Move | Space = Attack | E = Pickup')" class="btn-secondary">⚙️ OPTIONS & CONTROLS</button>
       </div>
     </div>
 
@@ -379,19 +363,19 @@
         <p>Select your combat class and enter the dungeon</p>
       </div>
       <div class="class-card-grid">
-        <div class="class-card selected" data-class="Warrior">
+        <div class="class-card selected" id="card-warrior" onclick="window.selectClass('Warrior')" data-class="Warrior">
           <div class="class-icon">🛡️</div>
           <div class="class-name">WARRIOR</div>
           <div class="class-role">Melee Tank / Berserker</div>
           <div class="class-stats">
-            ❤️ High Health (120 HP)<br>
+            ❤️ High Health (140 HP)<br>
             ⚡ Resource: Stamina<br>
             ⚔️ Attack: Heavy Slash & Whirlwind<br>
             🛡️ High Armor Mitigation
           </div>
         </div>
 
-        <div class="class-card" data-class="Mage">
+        <div class="class-card" id="card-mage" onclick="window.selectClass('Mage')" data-class="Mage">
           <div class="class-icon">🔮</div>
           <div class="class-name">MAGE</div>
           <div class="class-role">Elemental Sorcerer</div>
@@ -403,7 +387,7 @@
           </div>
         </div>
 
-        <div class="class-card" data-class="Rogue">
+        <div class="class-card" id="card-rogue" onclick="window.selectClass('Rogue')" data-class="Rogue">
           <div class="class-icon">🗡️</div>
           <div class="class-name">ROGUE</div>
           <div class="class-role">Shadow Assassin</div>
@@ -411,12 +395,12 @@
             💛 High Mobility & Crit<br>
             ⚡ Resource: Energy<br>
             🗡️ Attack: Poison Dagger & Smoke<br>
-            🎯 25% Critical Strike Chance
+            🎯 35% Critical Strike Chance
           </div>
         </div>
       </div>
       <div style="margin-top: 30px;">
-        <button id="btn-confirm-class" class="btn-primary" style="width: 260px;">ENTER THE DUNGEON ⚔️</button>
+        <button id="btn-confirm-class" onclick="window.startDungeonGame()" class="btn-primary" style="width: 260px;">ENTER THE DUNGEON ⚔️</button>
       </div>
     </div>
 
@@ -425,12 +409,12 @@
       <div class="modal-box">
         <div class="modal-header">
           <div class="modal-title">⏸️ GAME PAUSED</div>
-          <button id="btn-close-pause" class="modal-close">✕</button>
+          <button onclick="window.resumeGame()" class="modal-close">✕</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
-          <button id="btn-pause-resume" class="btn-primary">RESUME GAME</button>
-          <button id="btn-pause-save" class="btn-secondary">💾 SAVE TO SLOT 1</button>
-          <button id="btn-pause-mainmenu" class="btn-secondary">🏠 RETURN TO MAIN MENU</button>
+          <button onclick="window.resumeGame()" class="btn-primary">RESUME GAME</button>
+          <button onclick="window.quickSaveGame()" class="btn-secondary">💾 SAVE GAME</button>
+          <button onclick="window.showScreen('screen-main-menu')" class="btn-secondary">🏠 RETURN TO MAIN MENU</button>
         </div>
       </div>
     </div>
@@ -440,10 +424,14 @@
       <div class="modal-box" style="width: 600px;">
         <div class="modal-header">
           <div class="modal-title">🎒 HERO INVENTORY & GEAR</div>
-          <button id="btn-close-inventory" class="modal-close">✕</button>
+          <button onclick="window.hideModal('screen-inventory')" class="modal-close">✕</button>
         </div>
         <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;" id="inventory-grid-container">
-          <!-- Dynamically populated inventory slots -->
+          <div style="background: rgba(30,41,59,0.8); border: 1px solid #334155; padding: 15px; border-radius: 6px; text-align: center;">⚔️ Sword</div>
+          <div style="background: rgba(30,41,59,0.8); border: 1px solid #334155; padding: 15px; border-radius: 6px; text-align: center;">🛡️ Shield</div>
+          <div style="background: rgba(30,41,59,0.8); border: 1px solid #334155; padding: 15px; border-radius: 6px; text-align: center;">🧪 Potion</div>
+          <div style="background: rgba(30,41,59,0.8); border: 1px solid #334155; padding: 15px; border-radius: 6px; text-align: center;">💍 Ring</div>
+          <div style="background: rgba(30,41,59,0.8); border: 1px solid #334155; padding: 15px; border-radius: 6px; text-align: center;">📜 Scroll</div>
         </div>
       </div>
     </div>
@@ -453,10 +441,12 @@
       <div class="modal-box" style="width: 640px;">
         <div class="modal-header">
           <div class="modal-title">✨ TALENT MATRIX & SKILL TREE</div>
-          <button id="btn-close-skills" class="modal-close">✕</button>
+          <button onclick="window.hideModal('screen-skill-tree')" class="modal-close">✕</button>
         </div>
         <div id="skill-tree-container" style="display: flex; flex-direction: column; gap: 12px;">
-          <!-- Dynamically populated skill tree nodes -->
+          <div style="background: rgba(30,41,59,0.8); padding: 12px; border-radius: 6px;">💥 Heavy Slash - Level 2 (Unlocked)</div>
+          <div style="background: rgba(30,41,59,0.8); padding: 12px; border-radius: 6px;">🌀 Whirlwind AOE - Level 1 (Unlocked)</div>
+          <div style="background: rgba(30,41,59,0.8); padding: 12px; border-radius: 6px;">🛡️ Shield Wall - Locked (Req Level 5)</div>
         </div>
       </div>
     </div>
@@ -466,10 +456,11 @@
       <div class="modal-box" style="width: 580px;">
         <div class="modal-header">
           <div class="modal-title">📜 QUEST JOURNAL</div>
-          <button id="btn-close-quests" class="modal-close">✕</button>
+          <button onclick="window.hideModal('screen-quest-log')" class="modal-close">✕</button>
         </div>
         <div id="quest-list-container" style="display: flex; flex-direction: column; gap: 12px;">
-          <!-- Dynamically populated quest list -->
+          <div style="background: rgba(30,41,59,0.8); padding: 14px; border-radius: 6px;">⚔️ <b>Goblin Threat</b>: Defeat 5 Goblins (3/5)</div>
+          <div style="background: rgba(30,41,59,0.8); padding: 14px; border-radius: 6px;">🔑 <b>Catacomb Key</b>: Find secret chest</div>
         </div>
       </div>
     </div>
