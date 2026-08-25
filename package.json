@@ -1,0 +1,27 @@
+{
+  "name": "omniquest",
+  "version": "1.0.0",
+  "description": "Omniquest - High-Performance 2D Action RPG & Procedural Dungeon Crawler Engine",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --test dist/tests/*.test.js"
+  },
+  "keywords": [
+    "game",
+    "engine",
+    "rpg",
+    "ecs",
+    "canvas",
+    "webaudio",
+    "procgen",
+    "typescript"
+  ],
+  "author": "Divya",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}
