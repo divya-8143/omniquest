@@ -35,7 +35,7 @@
       background: radial-gradient(circle at center, #0f172a 0%, #05070c 100%);
     }
 
-    /* Top Navigation Bar - Normal Flex Header (Not Absolute) */
+    /* Top Navigation Bar */
     header#top-navbar {
       width: 100%;
       height: 60px;
@@ -92,7 +92,7 @@
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
     }
 
-    /* Game Canvas Viewport - Flex Grow Below Header */
+    /* Game Canvas Viewport */
     #viewport {
       position: relative;
       flex: 1;
@@ -109,6 +109,56 @@
       box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
       max-width: 100%;
       max-height: 100%;
+    }
+
+    /* Action Skill Bar Overlay at Bottom Center */
+    #action-bar-overlay {
+      position: absolute;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid rgba(56, 189, 248, 0.4);
+      padding: 10px 18px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+      z-index: 150;
+    }
+
+    .action-skill-btn {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid #38bdf8;
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-skill-btn:hover {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: #7dd3fc;
+      transform: translateY(-2px);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+    }
+
+    .action-skill-btn.heal-btn {
+      border-color: #22c55e;
+      background: rgba(20, 83, 45, 0.8);
+    }
+
+    .action-skill-btn.heal-btn:hover {
+      background: rgba(34, 197, 94, 0.4);
+      border-color: #4ade80;
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
     }
 
     /* Screens & Modals Overlay */
@@ -301,7 +351,7 @@
     /* Notification Toasts */
     #toast-container {
       position: absolute;
-      bottom: 60px;
+      bottom: 90px;
       right: 24px;
       display: flex;
       flex-direction: column;
@@ -324,7 +374,7 @@
 </head>
 <body>
   <div id="app-container">
-    <!-- Top Navigation Header (Fixed Height 60px) -->
+    <!-- Top Navigation Header -->
     <header id="top-navbar">
       <div class="brand-logo">
         <span>⚔️</span> OMNIQUEST
@@ -339,9 +389,18 @@
       </div>
     </header>
 
-    <!-- Main Game Canvas Viewport (Guaranteed Below Header) -->
+    <!-- Main Game Canvas Viewport -->
     <main id="viewport">
       <canvas id="gameCanvas" width="1280" height="720"></canvas>
+      
+      <!-- HTML ACTION SKILL BAR (5 POWERS: 1, 2, 3, 4, 5) -->
+      <div id="action-bar-overlay">
+        <button class="action-skill-btn" onclick="window.castSkill(0)">⚔️ Strike (1)</button>
+        <button class="action-skill-btn" onclick="window.castSkill(1)">🌀 Nova (2)</button>
+        <button class="action-skill-btn" onclick="window.castSkill(2)">🛡️ Shield (3)</button>
+        <button class="action-skill-btn" onclick="window.castSkill(3)">🌟 Meteor (4)</button>
+        <button class="action-skill-btn heal-btn" onclick="window.castSkill(4)">🧪 Heal (5)</button>
+      </div>
     </main>
 
     <!-- Notification Toasts Feed -->
@@ -356,7 +415,7 @@
       <div class="menu-button-group">
         <button id="btn-menu-start" onclick="window.showScreen('screen-class-select')" class="btn-primary">▶️ START NEW GAME</button>
         <button id="btn-menu-load" onclick="window.loadSavedGame()" class="btn-secondary">📂 LOAD SAVED GAME</button>
-        <button id="btn-menu-settings" onclick="window.showToast('WASD = Move | Space = Attack | E = Pickup')" class="btn-secondary">⚙️ OPTIONS & CONTROLS</button>
+        <button id="btn-menu-settings" onclick="window.showToast('WASD = Move | Space = Attack | E = Pickup | 1-5 = Powers')" class="btn-secondary">⚙️ OPTIONS & CONTROLS</button>
       </div>
     </div>
 
@@ -525,6 +584,10 @@
       if (window.gameApp) window.gameApp.toggleAudio();
     };
 
+    window.castSkill = function(idx) {
+      if (window.gameApp) window.gameApp.castHeroSkill(idx);
+    };
+
     window.showToast = function(msg) {
       var container = document.getElementById('toast-container');
       if (!container) return;
@@ -535,6 +598,6 @@
       setTimeout(function() { toast.remove(); }, 3500);
     };
   </script>
-  <script src="dist/bundle.js?v=1.0.4"></script>
+  <script src="dist/bundle.js?v=1.0.6"></script>
 </body>
 </html>
