@@ -273,7 +273,6 @@ class AAAFullGameApp {
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.key.toLowerCase());
       
-      // Hero Power Keys 1, 2, 3, 4
       if (e.key === '1') this.castHeroSkill(0);
       if (e.key === '2') this.castHeroSkill(1);
       if (e.key === '3') this.castHeroSkill(2);
@@ -300,7 +299,6 @@ class AAAFullGameApp {
     });
   }
 
-  // Hero Power Casting Logic for 1, 2, 3, 4
   public castHeroSkill(index: number): void {
     if (this.stateEngine.getState() === 'Paused' || this.stateEngine.getState() === 'MainMenu') return;
     const skill = this.heroSkills[index];
@@ -315,26 +313,22 @@ class AAAFullGameApp {
     skill.cooldown = skill.maxCooldown;
 
     if (index === 0) {
-      // Skill 1: Primary Strike
       if (!this.audioMuted) this.audio.playSwordSwing();
       this.particles.emit(this.playerPos, 30, '#38bdf8');
       this.dealAreaDamage(100, 30, false);
     } else if (index === 1) {
-      // Skill 2: Whirlwind / Frost Nova
       if (!this.audioMuted) this.audio.playExplosion();
       this.particles.emit(this.playerPos, 60, '#a855f7');
       this.triggerScreenShake(8);
       this.dealAreaDamage(180, 65, true);
       this.showToast('🌀 Whirlwind Nova Triggered!');
     } else if (index === 2) {
-      // Skill 3: Shield Wall / Arcane Barrier
       if (!this.audioMuted) this.audio.playPickup();
       this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 40);
       this.particles.emit(this.playerPos, 50, '#10b981');
       this.addFloatingText('+40 HP SHIELD 🛡️', this.playerPos, '#10b981');
       this.showToast('🛡️ Shield Wall Activated! +40 HP Shield');
     } else if (index === 3) {
-      // Skill 4: ULTIMATE METEOR
       if (!this.audioMuted) this.audio.playExplosion();
       this.triggerScreenShake(20);
       this.enemies.forEach(e => {
@@ -382,7 +376,6 @@ class AAAFullGameApp {
   private update(dt: number): void {
     if (this.stateEngine.getState() === 'Paused' || this.stateEngine.getState() === 'MainMenu') return;
 
-    // Cooldown management for skills
     this.heroSkills.forEach(s => {
       if (s.cooldown > 0) {
         s.cooldown = Math.max(0, s.cooldown - dt);
@@ -410,7 +403,7 @@ class AAAFullGameApp {
       }
     }
 
-    // --- ENEMY AI CHASE & ATTACK HERO ---
+    // ENEMY AI CHASE & ATTACK
     this.enemies.forEach(enemy => {
       if (enemy.attackCooldown > 0) {
         enemy.attackCooldown -= dt;
@@ -418,14 +411,12 @@ class AAAFullGameApp {
 
       const distToPlayer = enemy.pos.distance(this.playerPos);
       if (distToPlayer < 320 && distToPlayer > 28) {
-        // Enemy chases player
         const dir = this.playerPos.clone().sub(enemy.pos).normalize();
         enemy.pos.addScaled(dir, enemy.speed * 0.65 * dt);
       }
 
-      // Enemy attacks player when close
       if (distToPlayer < 35 && enemy.attackCooldown <= 0) {
-        enemy.attackCooldown = 1.2; // 1.2s attack rate
+        enemy.attackCooldown = 1.2;
         const damageDealt = 12;
         this.playerHp = Math.max(0, this.playerHp - damageDealt);
         this.addFloatingText('-12 HP 💔', this.playerPos, '#ef4444');
@@ -488,7 +479,6 @@ class AAAFullGameApp {
 
     this.ctx.save();
     
-    // Apply Camera & Screen Shake
     let shakeX = (Math.random() - 0.5) * this.screenShake;
     let shakeY = (Math.random() - 0.5) * this.screenShake;
     const camX = width / 2 - this.playerPos.x + shakeX;
@@ -582,46 +572,46 @@ class AAAFullGameApp {
   }
 
   private renderHUD(width: number, height: number): void {
-    // --- HUD SHIFTED DOWN BELOW NAVIGATION BAR (Y = 75) ---
-    const hudY = 75;
+    // --- HUD POSITIONED AT Y = 15 INSIDE CANVAS (Canvas is strictly below 60px header) ---
+    const hudY = 15;
 
     this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
     this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
     this.ctx.lineWidth = 2;
 
-    this.ctx.fillRect(20, hudY, 360, 95);
-    this.ctx.strokeRect(20, hudY, 360, 95);
+    this.ctx.fillRect(15, hudY, 360, 95);
+    this.ctx.strokeRect(15, hudY, 360, 95);
 
     this.ctx.font = 'bold 15px Inter';
     this.ctx.fillStyle = '#38bdf8';
-    this.ctx.fillText('HERO: ' + this.selectedClass.toUpperCase() + ' (Lvl ' + this.level + ')', 35, hudY + 25);
+    this.ctx.fillText('HERO: ' + this.selectedClass.toUpperCase() + ' (Lvl ' + this.level + ')', 30, hudY + 25);
 
     // HP Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    this.ctx.fillRect(35, hudY + 35, 220, 16);
+    this.ctx.fillRect(30, hudY + 35, 220, 16);
     this.ctx.fillStyle = '#ef4444';
-    this.ctx.fillRect(35, hudY + 35, (this.playerHp / this.playerMaxHp) * 220, 16);
+    this.ctx.fillRect(30, hudY + 35, (this.playerHp / this.playerMaxHp) * 220, 16);
     this.ctx.font = 'bold 11px Inter';
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText('HP: ' + this.playerHp + ' / ' + this.playerMaxHp, 45, hudY + 47);
+    this.ctx.fillText('HP: ' + this.playerHp + ' / ' + this.playerMaxHp, 40, hudY + 47);
 
     // Energy Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    this.ctx.fillRect(35, hudY + 56, 220, 14);
+    this.ctx.fillRect(30, hudY + 56, 220, 14);
     this.ctx.fillStyle = '#3b82f6';
-    this.ctx.fillRect(35, hudY + 56, (this.playerResource / this.playerMaxResource) * 220, 14);
+    this.ctx.fillRect(30, hudY + 56, (this.playerResource / this.playerMaxResource) * 220, 14);
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText('ENERGY: ' + this.playerResource + ' / ' + this.playerMaxResource, 45, hudY + 67);
+    this.ctx.fillText('ENERGY: ' + this.playerResource + ' / ' + this.playerMaxResource, 40, hudY + 67);
 
     // Gold
     this.ctx.font = 'bold 14px Inter';
     this.ctx.fillStyle = '#fbbf24';
-    this.ctx.fillText('💰 ' + this.gold + ' Gold', 270, hudY + 50);
+    this.ctx.fillText('💰 ' + this.gold + ' Gold', 265, hudY + 50);
 
-    // --- MINIMAP SHIFTED DOWN BELOW NAVBAR ---
+    // --- MINIMAP AT Y = 15 INSIDE CANVAS ---
     const mmSize = 120;
-    const mmX = width - mmSize - 20;
-    const mmY = 75;
+    const mmX = width - mmSize - 15;
+    const mmY = 15;
     this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
     this.ctx.fillRect(mmX, mmY, mmSize, mmSize);
     this.ctx.strokeRect(mmX, mmY, mmSize, mmSize);
@@ -638,7 +628,7 @@ class AAAFullGameApp {
     // --- HERO POWERS ACTION BAR AT BOTTOM CENTER (1, 2, 3, 4) ---
     const barWidth = 340;
     const barX = width / 2 - barWidth / 2;
-    const barY = height - 70;
+    const barY = height - 65;
 
     this.ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
     this.ctx.fillRect(barX, barY, barWidth, 55);

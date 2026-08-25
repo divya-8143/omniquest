@@ -686,7 +686,6 @@
         this.castHeroSkill(0);
       });
     }
-    // Hero Power Casting Logic for 1, 2, 3, 4
     castHeroSkill(index) {
       if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
       const skill = this.heroSkills[index];
@@ -914,34 +913,34 @@
       this.renderHUD(width, height);
     }
     renderHUD(width, height) {
-      const hudY = 75;
+      const hudY = 15;
       this.ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
       this.ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
       this.ctx.lineWidth = 2;
-      this.ctx.fillRect(20, hudY, 360, 95);
-      this.ctx.strokeRect(20, hudY, 360, 95);
+      this.ctx.fillRect(15, hudY, 360, 95);
+      this.ctx.strokeRect(15, hudY, 360, 95);
       this.ctx.font = "bold 15px Inter";
       this.ctx.fillStyle = "#38bdf8";
-      this.ctx.fillText("HERO: " + this.selectedClass.toUpperCase() + " (Lvl " + this.level + ")", 35, hudY + 25);
+      this.ctx.fillText("HERO: " + this.selectedClass.toUpperCase() + " (Lvl " + this.level + ")", 30, hudY + 25);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      this.ctx.fillRect(35, hudY + 35, 220, 16);
+      this.ctx.fillRect(30, hudY + 35, 220, 16);
       this.ctx.fillStyle = "#ef4444";
-      this.ctx.fillRect(35, hudY + 35, this.playerHp / this.playerMaxHp * 220, 16);
+      this.ctx.fillRect(30, hudY + 35, this.playerHp / this.playerMaxHp * 220, 16);
       this.ctx.font = "bold 11px Inter";
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 45, hudY + 47);
+      this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 40, hudY + 47);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      this.ctx.fillRect(35, hudY + 56, 220, 14);
+      this.ctx.fillRect(30, hudY + 56, 220, 14);
       this.ctx.fillStyle = "#3b82f6";
-      this.ctx.fillRect(35, hudY + 56, this.playerResource / this.playerMaxResource * 220, 14);
+      this.ctx.fillRect(30, hudY + 56, this.playerResource / this.playerMaxResource * 220, 14);
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 45, hudY + 67);
+      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 40, hudY + 67);
       this.ctx.font = "bold 14px Inter";
       this.ctx.fillStyle = "#fbbf24";
-      this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 270, hudY + 50);
+      this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 265, hudY + 50);
       const mmSize = 120;
-      const mmX = width - mmSize - 20;
-      const mmY = 75;
+      const mmX = width - mmSize - 15;
+      const mmY = 15;
       this.ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
       this.ctx.fillRect(mmX, mmY, mmSize, mmSize);
       this.ctx.strokeRect(mmX, mmY, mmSize, mmSize);
@@ -956,7 +955,7 @@
       );
       const barWidth = 340;
       const barX = width / 2 - barWidth / 2;
-      const barY = height - 70;
+      const barY = height - 65;
       this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
       this.ctx.fillRect(barX, barY, barWidth, 55);
       this.ctx.strokeRect(barX, barY, barWidth, 55);

@@ -35,22 +35,19 @@
       background: radial-gradient(circle at center, #0f172a 0%, #05070c 100%);
     }
 
-    /* Top Navigation Bar */
+    /* Top Navigation Bar - Normal Flex Header (Not Absolute) */
     header#top-navbar {
-      position: absolute;
-      top: 0;
-      left: 0;
       width: 100%;
       height: 60px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      flex-shrink: 0;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 2px solid rgba(56, 189, 248, 0.3);
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 24px;
       z-index: 100;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
 
     .brand-logo {
@@ -95,19 +92,23 @@
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
     }
 
-    /* Game Canvas Viewport */
+    /* Game Canvas Viewport - Flex Grow Below Header */
     #viewport {
       position: relative;
+      flex: 1;
       width: 100%;
-      height: 100%;
+      height: calc(100vh - 60px);
       display: flex;
       justify-content: center;
       align-items: center;
+      overflow: hidden;
     }
 
     canvas#gameCanvas {
       background-color: #030712;
       box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+      max-width: 100%;
+      max-height: 100%;
     }
 
     /* Screens & Modals Overlay */
@@ -323,7 +324,7 @@
 </head>
 <body>
   <div id="app-container">
-    <!-- Top Navigation Header -->
+    <!-- Top Navigation Header (Fixed Height 60px) -->
     <header id="top-navbar">
       <div class="brand-logo">
         <span>⚔️</span> OMNIQUEST
@@ -338,7 +339,7 @@
       </div>
     </header>
 
-    <!-- Main Game Canvas Viewport -->
+    <!-- Main Game Canvas Viewport (Guaranteed Below Header) -->
     <main id="viewport">
       <canvas id="gameCanvas" width="1280" height="720"></canvas>
     </main>
@@ -470,7 +471,6 @@
   </div>
 
   <script>
-    // Inline UI Controller fallback guaranteeing instant button responsiveness
     window.showScreen = function(screenId) {
       document.querySelectorAll('.overlay-screen').forEach(function(s) { s.classList.remove('visible'); });
       var target = document.getElementById(screenId);
@@ -535,6 +535,6 @@
       setTimeout(function() { toast.remove(); }, 3500);
     };
   </script>
-  <script src="dist/bundle.js?v=1.0.3"></script>
+  <script src="dist/bundle.js?v=1.0.4"></script>
 </body>
 </html>
