@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Omniquest: Realm of Shadows - Action RPG</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,7 +117,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(5, 7, 12, 0.94);
+      background: rgba(5, 7, 12, 0.95);
       backdrop-filter: blur(16px);
       display: flex;
       flex-direction: column;
@@ -466,6 +469,72 @@
     </div>
   </div>
 
-  <script src="dist/bundle.js"></script>
+  <script>
+    // Inline UI Controller fallback guaranteeing instant button responsiveness
+    window.showScreen = function(screenId) {
+      document.querySelectorAll('.overlay-screen').forEach(function(s) { s.classList.remove('visible'); });
+      var target = document.getElementById(screenId);
+      if (target) target.classList.add('visible');
+    };
+
+    window.selectClass = function(cls) {
+      document.querySelectorAll('.class-card').forEach(function(c) { c.classList.remove('selected'); });
+      var card = document.getElementById('card-' + cls.toLowerCase());
+      if (card) card.classList.add('selected');
+      if (window.gameApp) window.gameApp.selectedClass = cls;
+    };
+
+    window.startDungeonGame = function() {
+      document.querySelectorAll('.overlay-screen').forEach(function(s) { s.classList.remove('visible'); });
+      if (window.gameApp) window.gameApp.startDungeonGame();
+    };
+
+    window.toggleModal = function(modalId) {
+      var modal = document.getElementById(modalId);
+      if (!modal) return;
+      if (modal.classList.contains('visible')) {
+        modal.classList.remove('visible');
+      } else {
+        document.querySelectorAll('.overlay-screen').forEach(function(s) { s.classList.remove('visible'); });
+        modal.classList.add('visible');
+      }
+    };
+
+    window.hideModal = function(modalId) {
+      var modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove('visible');
+    };
+
+    window.togglePause = function() {
+      window.toggleModal('screen-pause');
+    };
+
+    window.resumeGame = function() {
+      window.hideModal('screen-pause');
+    };
+
+    window.quickSaveGame = function() {
+      if (window.gameApp) window.gameApp.quickSaveGame();
+    };
+
+    window.loadSavedGame = function() {
+      if (window.gameApp) window.gameApp.loadSavedGame();
+    };
+
+    window.toggleAudio = function() {
+      if (window.gameApp) window.gameApp.toggleAudio();
+    };
+
+    window.showToast = function(msg) {
+      var container = document.getElementById('toast-container');
+      if (!container) return;
+      var toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerText = msg;
+      container.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3500);
+    };
+  </script>
+  <script src="dist/bundle.js?v=1.0.3"></script>
 </body>
 </html>

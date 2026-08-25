@@ -59,6 +59,7 @@ class AAAFullGameApp {
     this.ctx = this.canvas.getContext('2d')!;
 
     this.dungeonData = this.dungeonGen.generate();
+    (window as any).gameApp = this;
     this.bindWindowGlobals();
     this.setupInputs();
     this.startLoop();

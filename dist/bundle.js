@@ -517,6 +517,7 @@
       if (!this.canvas) return;
       this.ctx = this.canvas.getContext("2d");
       this.dungeonData = this.dungeonGen.generate();
+      window.gameApp = this;
       this.bindWindowGlobals();
       this.setupInputs();
       this.startLoop();
