@@ -284,22 +284,6 @@
     }
   };
 
-  // src/gameplay/EnemyDefinitions.ts
-  var EnemyBestiary = class {
-    static getEnemy(id) {
-      return this.bestiary.get(id);
-    }
-    static getAllEnemies() {
-      return Array.from(this.bestiary.values());
-    }
-  };
-  __publicField(EnemyBestiary, "bestiary", /* @__PURE__ */ new Map([
-    ["goblin_scout", { id: "goblin_scout", name: "Goblin Scout", maxHp: 40, damage: 8, armor: 1, speed: 120, xpReward: 25, goldReward: 5 }],
-    ["skeleton_warrior", { id: "skeleton_warrior", name: "Skeleton Warrior", maxHp: 85, damage: 15, armor: 4, speed: 80, xpReward: 50, goldReward: 12 }],
-    ["shadow_necromancer", { id: "shadow_necromancer", name: "Shadow Necromancer", maxHp: 180, damage: 28, armor: 6, speed: 90, xpReward: 150, goldReward: 45 }],
-    ["inferno_dragon_boss", { id: "inferno_dragon_boss", name: "Inferno Dragon Boss", maxHp: 1200, damage: 75, armor: 20, speed: 110, xpReward: 1e3, goldReward: 500 }]
-  ]));
-
   // src/core/StateEngine.ts
   var _GlobalStateEngine = class _GlobalStateEngine {
     constructor() {
@@ -483,11 +467,11 @@
       __publicField(this, "screenShake", 0);
       // Hero Powers (1, 2, 3, 4, 5)
       __publicField(this, "heroSkills", [
-        { id: "skill_1", name: "Primary Strike", icon: "\u2694\uFE0F", hotkey: "1", cooldown: 0, maxCooldown: 0.4, manaCost: 5 },
-        { id: "skill_2", name: "Whirlwind / Nova", icon: "\u{1F300}", hotkey: "2", cooldown: 0, maxCooldown: 2.5, manaCost: 20 },
-        { id: "skill_3", name: "Shield / Barrier", icon: "\u{1F6E1}\uFE0F", hotkey: "3", cooldown: 0, maxCooldown: 5, manaCost: 25 },
-        { id: "skill_4", name: "ULTIMATE METEOR", icon: "\u{1F31F}", hotkey: "4", cooldown: 0, maxCooldown: 10, manaCost: 45 },
-        { id: "skill_5", name: "Divine Healing", icon: "\u{1F9EA}", hotkey: "5", cooldown: 0, maxCooldown: 6, manaCost: 15 }
+        { id: "skill_1", name: "Primary Strike", icon: "\u2694\uFE0F", hotkey: "1", cooldown: 0, maxCooldown: 0.3, manaCost: 5 },
+        { id: "skill_2", name: "Whirlwind / Nova", icon: "\u{1F300}", hotkey: "2", cooldown: 0, maxCooldown: 2, manaCost: 20 },
+        { id: "skill_3", name: "Shield / Barrier", icon: "\u{1F6E1}\uFE0F", hotkey: "3", cooldown: 0, maxCooldown: 4, manaCost: 25 },
+        { id: "skill_4", name: "ULTIMATE METEOR", icon: "\u{1F31F}", hotkey: "4", cooldown: 0, maxCooldown: 8, manaCost: 40 },
+        { id: "skill_5", name: "Divine Healing", icon: "\u{1F9EA}", hotkey: "5", cooldown: 0, maxCooldown: 5, manaCost: 15 }
       ]);
       if (typeof document === "undefined") return;
       this.canvas = document.getElementById("gameCanvas");
@@ -634,20 +618,25 @@
         const startRoom = this.dungeonData.rooms[0];
         this.playerPos.set((startRoom.x + startRoom.width / 2) * 32, (startRoom.y + startRoom.height / 2) * 32);
       }
-      const enemyDefs = EnemyBestiary.getAllEnemies();
-      const colors = ["#ef4444", "#a855f7", "#f59e0b", "#10b981"];
+      const enemiesList = [
+        { name: "Goblin Scout", hp: 50, color: "#ef4444", speed: 110 },
+        { name: "Skeleton Warrior", hp: 80, color: "#a855f7", speed: 90 },
+        { name: "Shadow Necromancer", hp: 120, color: "#f59e0b", speed: 100 },
+        { name: "Inferno Dragon Boss", hp: 220, color: "#10b981", speed: 120 }
+      ];
       for (let i = 1; i < this.dungeonData.rooms.length; i++) {
         const rm = this.dungeonData.rooms[i];
-        const def = enemyDefs[i % enemyDefs.length];
+        const def = enemiesList[i % enemiesList.length];
         const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
         this.enemies.push({
           pos: center.clone(),
-          hp: def.maxHp,
-          maxHp: def.maxHp,
+          hp: def.hp,
+          maxHp: def.hp,
           name: def.name,
-          color: colors[i % colors.length],
+          color: def.color,
           speed: def.speed,
-          attackCooldown: 0
+          attackCooldown: 0,
+          flashTimer: 0
         });
         const types = ["health", "mana", "gold", "speed", "shield"];
         const pType = types[i % types.length];
@@ -701,13 +690,13 @@
       skill.cooldown = skill.maxCooldown;
       if (index === 0) {
         if (!this.audioMuted) this.audio.playSwordSwing();
-        this.particles.emit(this.playerPos, 30, "#38bdf8");
-        this.dealAreaDamage(100, 30, false);
+        this.particles.emit(this.playerPos, 35, "#38bdf8");
+        this.dealAreaDamage(350, 60, false);
       } else if (index === 1) {
         if (!this.audioMuted) this.audio.playExplosion();
-        this.particles.emit(this.playerPos, 60, "#a855f7");
-        this.triggerScreenShake(8);
-        this.dealAreaDamage(180, 65, true);
+        this.particles.emit(this.playerPos, 70, "#a855f7");
+        this.triggerScreenShake(10);
+        this.dealAreaDamage(450, 95, true);
         this.showToast("\u{1F300} Whirlwind Nova Triggered!");
       } else if (index === 2) {
         if (!this.audioMuted) this.audio.playPickup();
@@ -717,12 +706,8 @@
         this.showToast("\u{1F6E1}\uFE0F Shield Wall Activated! +40 HP Shield");
       } else if (index === 3) {
         if (!this.audioMuted) this.audio.playExplosion();
-        this.triggerScreenShake(20);
-        this.enemies.forEach((e) => {
-          e.hp -= 120;
-          this.addFloatingText("\u{1F4A5} METEOR 120", e.pos, "#f59e0b");
-          this.particles.emit(e.pos, 40, "#f59e0b");
-        });
+        this.triggerScreenShake(22);
+        this.dealAreaDamage(1e3, 160, true);
         this.showToast("\u{1F31F} ULTIMATE METEOR STRIKE CLEARED THE DUNGEON!");
       } else if (index === 4) {
         if (!this.audioMuted) this.audio.playPickup();
@@ -737,23 +722,24 @@
       this.enemies.forEach((enemy, idx) => {
         if (enemy.pos.distance(this.playerPos) < radius) {
           enemy.hp -= damageAmount;
+          enemy.flashTimer = 0.2;
           this.addFloatingText(
-            isSpecial ? "\u{1F4A5} " + damageAmount : "-" + damageAmount,
+            isSpecial ? "\u{1F4A5} CRIT -" + damageAmount : "-" + damageAmount,
             enemy.pos,
-            isSpecial ? "#a855f7" : "#ef4444"
+            isSpecial ? "#fbbf24" : "#ef4444"
           );
-          this.particles.emit(enemy.pos, 20, "#ef4444");
+          this.particles.emit(enemy.pos, 25, isSpecial ? "#fbbf24" : "#ef4444");
           if (enemy.hp <= 0) {
             if (!this.audioMuted) this.audio.playExplosion();
             this.quests.onKillEnemy("enemy");
-            this.gold += 35;
-            this.xp += 40;
-            this.addFloatingText("+40 XP", this.playerPos, "#38bdf8");
+            this.gold += 45;
+            this.xp += 50;
+            this.addFloatingText("+50 XP", this.playerPos, "#38bdf8");
             if (this.xp >= this.maxXp) {
               this.level++;
               this.xp -= this.maxXp;
               this.maxXp = Math.floor(this.maxXp * 1.5);
-              this.playerMaxHp += 20;
+              this.playerMaxHp += 25;
               this.playerHp = this.playerMaxHp;
               this.showToast("\u{1F31F} LEVEL UP! You reached Level " + this.level + "!");
             }
@@ -765,7 +751,7 @@
     update(dt) {
       if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
       if (this.playerResource < this.playerMaxResource) {
-        this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 18 * dt);
+        this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 20 * dt);
       }
       this.heroSkills.forEach((s) => {
         if (s.cooldown > 0) {
@@ -792,10 +778,13 @@
         if (enemy.attackCooldown > 0) {
           enemy.attackCooldown -= dt;
         }
+        if (enemy.flashTimer > 0) {
+          enemy.flashTimer -= dt;
+        }
         const distToPlayer = enemy.pos.distance(this.playerPos);
-        if (distToPlayer < 320 && distToPlayer > 28) {
+        if (distToPlayer < 350 && distToPlayer > 28) {
           const dir = this.playerPos.clone().sub(enemy.pos).normalize();
-          enemy.pos.addScaled(dir, enemy.speed * 0.65 * dt);
+          enemy.pos.addScaled(dir, enemy.speed * 0.7 * dt);
         }
         if (distToPlayer < 35 && enemy.attackCooldown <= 0) {
           enemy.attackCooldown = 1.2;
@@ -883,19 +872,23 @@
       });
       this.enemies.forEach((e) => {
         this.ctx.beginPath();
-        this.ctx.arc(e.pos.x, e.pos.y, 14, 0, Math.PI * 2);
-        this.ctx.fillStyle = e.color;
+        this.ctx.arc(e.pos.x, e.pos.y, 16, 0, Math.PI * 2);
+        this.ctx.fillStyle = e.flashTimer > 0 ? "#ffffff" : e.color;
         this.ctx.shadowColor = e.color;
-        this.ctx.shadowBlur = 12;
+        this.ctx.shadowBlur = e.flashTimer > 0 ? 25 : 12;
         this.ctx.fill();
         this.ctx.shadowBlur = 0;
-        this.ctx.font = "11px Inter";
+        this.ctx.font = "bold 11px Inter";
         this.ctx.fillStyle = "#f87171";
-        this.ctx.fillText(e.name, e.pos.x - 30, e.pos.y - 22);
-        this.ctx.fillStyle = "rgba(0,0,0,0.6)";
-        this.ctx.fillRect(e.pos.x - 20, e.pos.y - 18, 40, 5);
+        this.ctx.fillText(e.name + " (" + Math.max(0, Math.round(e.hp)) + "/" + e.maxHp + ")", e.pos.x - 45, e.pos.y - 24);
+        this.ctx.fillStyle = "rgba(0,0,0,0.8)";
+        this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
         this.ctx.fillStyle = "#ef4444";
-        this.ctx.fillRect(e.pos.x - 20, e.pos.y - 18, e.hp / e.maxHp * 40, 5);
+        const hpWidth = Math.max(0, e.hp / e.maxHp * 60);
+        this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, hpWidth, 6);
+        this.ctx.strokeStyle = "#ffffff";
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
       });
       this.particles.getParticles().forEach((p) => {
         this.ctx.beginPath();

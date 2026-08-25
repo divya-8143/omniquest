@@ -56,7 +56,7 @@ class AAAFullGameApp {
   private skills = new SkillTreeMatrix();
   private quests = new QuestManager();
   private powerups: PowerUp[] = [];
-  private enemies: Array<{ pos: Vector2D; hp: number; maxHp: number; name: string; color: string; speed: number; attackCooldown: number }> = [];
+  private enemies: Array<{ pos: Vector2D; hp: number; maxHp: number; name: string; color: string; speed: number; attackCooldown: number; flashTimer: number }> = [];
 
   private floatingTexts: Array<{ text: string; pos: Vector2D; color: string; life: number }> = [];
   public audioMuted: boolean = false;
@@ -64,11 +64,11 @@ class AAAFullGameApp {
 
   // Hero Powers (1, 2, 3, 4, 5)
   private heroSkills: ActiveSkill[] = [
-    { id: 'skill_1', name: 'Primary Strike', icon: '⚔️', hotkey: '1', cooldown: 0, maxCooldown: 0.4, manaCost: 5 },
-    { id: 'skill_2', name: 'Whirlwind / Nova', icon: '🌀', hotkey: '2', cooldown: 0, maxCooldown: 2.5, manaCost: 20 },
-    { id: 'skill_3', name: 'Shield / Barrier', icon: '🛡️', hotkey: '3', cooldown: 0, maxCooldown: 5.0, manaCost: 25 },
-    { id: 'skill_4', name: 'ULTIMATE METEOR', icon: '🌟', hotkey: '4', cooldown: 0, maxCooldown: 10.0, manaCost: 45 },
-    { id: 'skill_5', name: 'Divine Healing', icon: '🧪', hotkey: '5', cooldown: 0, maxCooldown: 6.0, manaCost: 15 }
+    { id: 'skill_1', name: 'Primary Strike', icon: '⚔️', hotkey: '1', cooldown: 0, maxCooldown: 0.3, manaCost: 5 },
+    { id: 'skill_2', name: 'Whirlwind / Nova', icon: '🌀', hotkey: '2', cooldown: 0, maxCooldown: 2.0, manaCost: 20 },
+    { id: 'skill_3', name: 'Shield / Barrier', icon: '🛡️', hotkey: '3', cooldown: 0, maxCooldown: 4.0, manaCost: 25 },
+    { id: 'skill_4', name: 'ULTIMATE METEOR', icon: '🌟', hotkey: '4', cooldown: 0, maxCooldown: 8.0, manaCost: 40 },
+    { id: 'skill_5', name: 'Divine Healing', icon: '🧪', hotkey: '5', cooldown: 0, maxCooldown: 5.0, manaCost: 15 }
   ];
 
   constructor() {
@@ -238,22 +238,28 @@ class AAAFullGameApp {
       this.playerPos.set((startRoom.x + startRoom.width / 2) * 32, (startRoom.y + startRoom.height / 2) * 32);
     }
 
-    const enemyDefs = EnemyBestiary.getAllEnemies();
-    const colors = ['#ef4444', '#a855f7', '#f59e0b', '#10b981'];
+    // Balanced Enemy HP for satisfying combat feedback
+    const enemiesList = [
+      { name: 'Goblin Scout', hp: 50, color: '#ef4444', speed: 110 },
+      { name: 'Skeleton Warrior', hp: 80, color: '#a855f7', speed: 90 },
+      { name: 'Shadow Necromancer', hp: 120, color: '#f59e0b', speed: 100 },
+      { name: 'Inferno Dragon Boss', hp: 220, color: '#10b981', speed: 120 }
+    ];
 
     for (let i = 1; i < this.dungeonData.rooms.length; i++) {
       const rm = this.dungeonData.rooms[i];
-      const def = enemyDefs[i % enemyDefs.length];
+      const def = enemiesList[i % enemiesList.length];
       const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
 
       this.enemies.push({
         pos: center.clone(),
-        hp: def.maxHp,
-        maxHp: def.maxHp,
+        hp: def.hp,
+        maxHp: def.hp,
         name: def.name,
-        color: colors[i % colors.length],
+        color: def.color,
         speed: def.speed,
-        attackCooldown: 0
+        attackCooldown: 0,
+        flashTimer: 0
       });
 
       const types: Array<'health' | 'mana' | 'gold' | 'speed' | 'shield'> = ['health', 'mana', 'gold', 'speed', 'shield'];
@@ -316,16 +322,16 @@ class AAAFullGameApp {
     skill.cooldown = skill.maxCooldown;
 
     if (index === 0) {
-      // Skill 1: Primary Strike
+      // Skill 1: Primary Strike - 60 Damage, 350px Radius
       if (!this.audioMuted) this.audio.playSwordSwing();
-      this.particles.emit(this.playerPos, 30, '#38bdf8');
-      this.dealAreaDamage(100, 30, false);
+      this.particles.emit(this.playerPos, 35, '#38bdf8');
+      this.dealAreaDamage(350, 60, false);
     } else if (index === 1) {
-      // Skill 2: Whirlwind Nova
+      // Skill 2: Whirlwind Nova - 95 Damage, 450px Radius
       if (!this.audioMuted) this.audio.playExplosion();
-      this.particles.emit(this.playerPos, 60, '#a855f7');
-      this.triggerScreenShake(8);
-      this.dealAreaDamage(180, 65, true);
+      this.particles.emit(this.playerPos, 70, '#a855f7');
+      this.triggerScreenShake(10);
+      this.dealAreaDamage(450, 95, true);
       this.showToast('🌀 Whirlwind Nova Triggered!');
     } else if (index === 2) {
       // Skill 3: Shield Wall
@@ -335,14 +341,10 @@ class AAAFullGameApp {
       this.addFloatingText('+40 HP SHIELD 🛡️', this.playerPos, '#10b981');
       this.showToast('🛡️ Shield Wall Activated! +40 HP Shield');
     } else if (index === 3) {
-      // Skill 4: ULTIMATE METEOR
+      // Skill 4: ULTIMATE METEOR STRIKE - 160 Damage All Enemies
       if (!this.audioMuted) this.audio.playExplosion();
-      this.triggerScreenShake(20);
-      this.enemies.forEach(e => {
-        e.hp -= 120;
-        this.addFloatingText('💥 METEOR 120', e.pos, '#f59e0b');
-        this.particles.emit(e.pos, 40, '#f59e0b');
-      });
+      this.triggerScreenShake(22);
+      this.dealAreaDamage(1000, 160, true);
       this.showToast('🌟 ULTIMATE METEOR STRIKE CLEARED THE DUNGEON!');
     } else if (index === 4) {
       // Skill 5: DIVINE HEALING POTION
@@ -359,25 +361,27 @@ class AAAFullGameApp {
     this.enemies.forEach((enemy, idx) => {
       if (enemy.pos.distance(this.playerPos) < radius) {
         enemy.hp -= damageAmount;
+        enemy.flashTimer = 0.2; // Hit flash
+
         this.addFloatingText(
-          isSpecial ? '💥 ' + damageAmount : '-' + damageAmount,
+          isSpecial ? '💥 CRIT -' + damageAmount : '-' + damageAmount,
           enemy.pos,
-          isSpecial ? '#a855f7' : '#ef4444'
+          isSpecial ? '#fbbf24' : '#ef4444'
         );
-        this.particles.emit(enemy.pos, 20, '#ef4444');
+        this.particles.emit(enemy.pos, 25, isSpecial ? '#fbbf24' : '#ef4444');
 
         if (enemy.hp <= 0) {
           if (!this.audioMuted) this.audio.playExplosion();
           this.quests.onKillEnemy('enemy');
-          this.gold += 35;
-          this.xp += 40;
-          this.addFloatingText('+40 XP', this.playerPos, '#38bdf8');
+          this.gold += 45;
+          this.xp += 50;
+          this.addFloatingText('+50 XP', this.playerPos, '#38bdf8');
 
           if (this.xp >= this.maxXp) {
             this.level++;
             this.xp -= this.maxXp;
             this.maxXp = Math.floor(this.maxXp * 1.5);
-            this.playerMaxHp += 20;
+            this.playerMaxHp += 25;
             this.playerHp = this.playerMaxHp;
             this.showToast('🌟 LEVEL UP! You reached Level ' + this.level + '!');
           }
@@ -391,9 +395,9 @@ class AAAFullGameApp {
   private update(dt: number): void {
     if (this.stateEngine.getState() === 'Paused' || this.stateEngine.getState() === 'MainMenu') return;
 
-    // --- AUTOMATIC ENERGY REGENERATION (+18 Energy / sec) ---
+    // Automatic Energy Regeneration (+20 Energy / sec)
     if (this.playerResource < this.playerMaxResource) {
-      this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 18 * dt);
+      this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 20 * dt);
     }
 
     // Cooldown management for skills
@@ -429,11 +433,14 @@ class AAAFullGameApp {
       if (enemy.attackCooldown > 0) {
         enemy.attackCooldown -= dt;
       }
+      if (enemy.flashTimer > 0) {
+        enemy.flashTimer -= dt;
+      }
 
       const distToPlayer = enemy.pos.distance(this.playerPos);
-      if (distToPlayer < 320 && distToPlayer > 28) {
+      if (distToPlayer < 350 && distToPlayer > 28) {
         const dir = this.playerPos.clone().sub(enemy.pos).normalize();
-        enemy.pos.addScaled(dir, enemy.speed * 0.65 * dt);
+        enemy.pos.addScaled(dir, enemy.speed * 0.7 * dt);
       }
 
       if (distToPlayer < 35 && enemy.attackCooldown <= 0) {
@@ -537,23 +544,30 @@ class AAAFullGameApp {
       this.ctx.shadowBlur = 0;
     });
 
-    // Enemies
+    // Enemies with clear hit flash & visible HP decrease
     this.enemies.forEach(e => {
       this.ctx.beginPath();
-      this.ctx.arc(e.pos.x, e.pos.y, 14, 0, Math.PI * 2);
-      this.ctx.fillStyle = e.color;
+      this.ctx.arc(e.pos.x, e.pos.y, 16, 0, Math.PI * 2);
+      this.ctx.fillStyle = e.flashTimer > 0 ? '#ffffff' : e.color;
       this.ctx.shadowColor = e.color;
-      this.ctx.shadowBlur = 12;
+      this.ctx.shadowBlur = e.flashTimer > 0 ? 25 : 12;
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
 
-      this.ctx.font = '11px Inter';
+      // Enemy Name
+      this.ctx.font = 'bold 11px Inter';
       this.ctx.fillStyle = '#f87171';
-      this.ctx.fillText(e.name, e.pos.x - 30, e.pos.y - 22);
-      this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      this.ctx.fillRect(e.pos.x - 20, e.pos.y - 18, 40, 5);
+      this.ctx.fillText(e.name + ' (' + Math.max(0, Math.round(e.hp)) + '/' + e.maxHp + ')', e.pos.x - 45, e.pos.y - 24);
+
+      // Enemy HP Bar Background & Red Bar
+      this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
       this.ctx.fillStyle = '#ef4444';
-      this.ctx.fillRect(e.pos.x - 20, e.pos.y - 18, (e.hp / e.maxHp) * 40, 5);
+      const hpWidth = Math.max(0, (e.hp / e.maxHp) * 60);
+      this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, hpWidth, 6);
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
     });
 
     // Particles
@@ -615,7 +629,7 @@ class AAAFullGameApp {
     this.ctx.fillStyle = '#ffffff';
     this.ctx.fillText('HP: ' + Math.round(this.playerHp) + ' / ' + this.playerMaxHp, 40, hudY + 47);
 
-    // Energy Bar (Auto Regenerating)
+    // Energy Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     this.ctx.fillRect(30, hudY + 56, 220, 14);
     this.ctx.fillStyle = '#3b82f6';
@@ -645,7 +659,7 @@ class AAAFullGameApp {
       6, 6
     );
 
-    // --- HERO POWERS ACTION BAR AT BOTTOM CENTER (1, 2, 3, 4, 5) ---
+    // Action Bar in Canvas
     const barWidth = 430;
     const barX = width / 2 - barWidth / 2;
     const barY = height - 65;
