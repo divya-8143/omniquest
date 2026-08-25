@@ -300,38 +300,371 @@
     ["inferno_dragon_boss", { id: "inferno_dragon_boss", name: "Inferno Dragon Boss", maxHp: 1200, damage: 75, armor: 20, speed: 110, xpReward: 1e3, goldReward: 500 }]
   ]));
 
+  // src/core/StateEngine.ts
+  var _GlobalStateEngine = class _GlobalStateEngine {
+    constructor() {
+      __publicField(this, "currentState", "Initializing");
+      __publicField(this, "observers", []);
+    }
+    static getInstance() {
+      if (!_GlobalStateEngine.instance) {
+        _GlobalStateEngine.instance = new _GlobalStateEngine();
+      }
+      return _GlobalStateEngine.instance;
+    }
+    getState() {
+      return this.currentState;
+    }
+    setState(newState) {
+      if (this.currentState === newState) return;
+      const oldState = this.currentState;
+      this.currentState = newState;
+      console.log(`[StateEngine] Transitioned: ${oldState} -> ${newState}`);
+      this.notifyObservers(oldState, newState);
+    }
+    subscribe(observer) {
+      this.observers.push(observer);
+    }
+    notifyObservers(oldState, newState) {
+      this.observers.forEach((obs) => obs.onStateChange(oldState, newState));
+    }
+  };
+  __publicField(_GlobalStateEngine, "instance");
+  var GlobalStateEngine = _GlobalStateEngine;
+
+  // src/gameplay/ClassSystem.ts
+  var ClassSystem = class {
+    static getClass(className) {
+      return this.classes.get(className);
+    }
+  };
+  __publicField(ClassSystem, "classes", /* @__PURE__ */ new Map([
+    ["Warrior", {
+      className: "Warrior",
+      resourceType: "Stamina",
+      maxResource: 100,
+      baseAttack: 15,
+      baseDefense: 10,
+      specialAbilities: ["Shield Wall", "Whirlwind", "Berserk"]
+    }],
+    ["Mage", {
+      className: "Mage",
+      resourceType: "Mana",
+      maxResource: 150,
+      baseAttack: 22,
+      baseDefense: 4,
+      specialAbilities: ["Fireball", "Arcane Blink", "Meteor Nova"]
+    }],
+    ["Rogue", {
+      className: "Rogue",
+      resourceType: "Energy",
+      maxResource: 120,
+      baseAttack: 18,
+      baseDefense: 6,
+      specialAbilities: ["Shadowstep", "Poison Dagger", "Smoke Bomb"]
+    }]
+  ]));
+
+  // src/storage/Compression.ts
+  var Compression = class {
+    static compress(input) {
+      if (!input) return "";
+      let result = "";
+      let count = 1;
+      for (let i = 0; i < input.length; i++) {
+        if (input[i] === input[i + 1]) {
+          count++;
+        } else {
+          result += input[i] + (count > 1 ? count : "");
+          count = 1;
+        }
+      }
+      return result;
+    }
+    static decompress(compressed) {
+      if (!compressed) return "";
+      let result = "";
+      for (let i = 0; i < compressed.length; i++) {
+        const char = compressed[i];
+        let numStr = "";
+        while (i + 1 < compressed.length && !isNaN(Number(compressed[i + 1]))) {
+          numStr += compressed[i + 1];
+          i++;
+        }
+        const count = numStr ? parseInt(numStr, 10) : 1;
+        result += char.repeat(count);
+      }
+      return result;
+    }
+  };
+
+  // src/storage/SecuritySaveManager.ts
+  var SecuritySaveManager = class {
+    static createHMAC(dataString) {
+      let hash = 0;
+      const combined = dataString + this.SECRET_KEY;
+      for (let i = 0; i < combined.length; i++) {
+        const char = combined.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0;
+      }
+      return Math.abs(hash).toString(16);
+    }
+    static saveGame(slotId, saveData) {
+      try {
+        const rawPayload = JSON.stringify(saveData);
+        const checksum = this.createHMAC(rawPayload);
+        const fullSave = { ...saveData, checksum };
+        const compressedPayload = Compression.compress(JSON.stringify(fullSave));
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem(`omniquest_save_${slotId}`, compressedPayload);
+        }
+        console.log(`[SaveManager] Saved slot: ${slotId} with HMAC: ${checksum}`);
+        return true;
+      } catch (err) {
+        console.error("[SaveManager] Save failed:", err);
+        return false;
+      }
+    }
+    static loadGame(slotId) {
+      try {
+        let compressedPayload = null;
+        if (typeof localStorage !== "undefined") {
+          compressedPayload = localStorage.getItem(`omniquest_save_${slotId}`);
+        }
+        if (!compressedPayload) return null;
+        const jsonStr = Compression.decompress(compressedPayload);
+        const fullSave = JSON.parse(jsonStr);
+        const { checksum, ...restData } = fullSave;
+        const expectedChecksum = this.createHMAC(JSON.stringify(restData));
+        if (checksum !== expectedChecksum) {
+          console.warn(`[SecuritySaveManager] Anti-Tamper Check Failed for slot: ${slotId}!`);
+          return null;
+        }
+        console.log(`[SecuritySaveManager] Slot ${slotId} verified and loaded cleanly.`);
+        return fullSave;
+      } catch (err) {
+        console.error("[SaveManager] Load failed:", err);
+        return null;
+      }
+    }
+  };
+  __publicField(SecuritySaveManager, "SECRET_KEY", "OMNIQUEST_HMAC_SECURE_KEY");
+
+  // src/gameplay/CombatCalculator.ts
+  var CombatCalculator = class {
+    static calculateDamage(attacker, defender, element = "physical") {
+      const isCrit = Math.random() < attacker.critChance;
+      let rawDamage = attacker.attack * (isCrit ? attacker.critMultiplier : 1);
+      let armor = defender.defense;
+      if (element === "fire") armor += defender.fireResist * 0.5;
+      if (element === "frost") armor += defender.frostResist * 0.5;
+      const mitigationRatio = 100 / (100 + Math.max(0, armor));
+      const finalDamage = Math.max(1, Math.round(rawDamage * mitigationRatio));
+      const mitigated = Math.round(rawDamage - finalDamage);
+      return { finalDamage, isCrit, mitigated };
+    }
+    static processStatusQueue(effects, dt) {
+      let damageOverTime = 0;
+      let stunActive = false;
+      for (let i = effects.length - 1; i >= 0; i--) {
+        const effect = effects[i];
+        effect.duration -= dt;
+        if (effect.type === "poison" || effect.type === "burn") {
+          damageOverTime += effect.potency * dt;
+        } else if (effect.type === "stun") {
+          stunActive = true;
+        }
+        if (effect.duration <= 0) {
+          effects.splice(i, 1);
+        }
+      }
+      return { damageOverTime: Math.round(damageOverTime), stunActive };
+    }
+  };
+
   // src/index.ts
-  console.log("--- Omniquest 2D Action RPG Engine ---");
-  var BrowserGameApp = class {
+  console.log("--- Omniquest: Realm of Shadows Engine ---");
+  var AAAFullGameApp = class {
     constructor() {
       __publicField(this, "canvas");
       __publicField(this, "ctx");
-      __publicField(this, "dungeonGen", new DungeonGenerator(40, 40));
+      __publicField(this, "stateEngine", GlobalStateEngine.getInstance());
+      __publicField(this, "dungeonGen", new DungeonGenerator(45, 45));
       __publicField(this, "dungeonData");
+      __publicField(this, "selectedClass", "Warrior");
       __publicField(this, "playerPos", new Vector2D(200, 200));
       __publicField(this, "playerVel", new Vector2D());
-      __publicField(this, "playerHp", 100);
-      __publicField(this, "playerMaxHp", 100);
-      __publicField(this, "playerMana", 80);
-      __publicField(this, "playerMaxMana", 100);
-      __publicField(this, "gold", 350);
-      __publicField(this, "level", 5);
+      __publicField(this, "playerHp", 120);
+      __publicField(this, "playerMaxHp", 120);
+      __publicField(this, "playerResource", 100);
+      __publicField(this, "playerMaxResource", 100);
+      __publicField(this, "gold", 150);
+      __publicField(this, "level", 1);
+      __publicField(this, "xp", 0);
+      __publicField(this, "maxXp", 100);
       __publicField(this, "keys", /* @__PURE__ */ new Set());
       __publicField(this, "particles", new ParticleEngine());
       __publicField(this, "audio", new AudioSynthesizer());
       __publicField(this, "skills", new SkillTreeMatrix());
       __publicField(this, "quests", new QuestManager());
+      __publicField(this, "powerups", []);
       __publicField(this, "enemies", []);
+      __publicField(this, "floatingTexts", []);
+      __publicField(this, "audioMuted", false);
       if (typeof document === "undefined") return;
       this.canvas = document.getElementById("gameCanvas");
       if (!this.canvas) return;
       this.ctx = this.canvas.getContext("2d");
       this.dungeonData = this.dungeonGen.generate();
-      this.spawnEntities();
+      this.setupUIHandlers();
       this.setupInputs();
       this.startLoop();
     }
-    spawnEntities() {
+    showToast(message) {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.innerText = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }
+    addFloatingText(text, pos, color = "#ffffff") {
+      this.floatingTexts.push({
+        text,
+        pos: pos.clone(),
+        color,
+        life: 1.2
+      });
+    }
+    setupUIHandlers() {
+      const btnPause = document.getElementById("btn-nav-pause");
+      const btnInventory = document.getElementById("btn-nav-inventory");
+      const btnSkills = document.getElementById("btn-nav-skills");
+      const btnQuests = document.getElementById("btn-nav-quests");
+      const btnSave = document.getElementById("btn-nav-save");
+      const btnAudio = document.getElementById("btn-nav-audio");
+      if (btnPause) {
+        btnPause.onclick = () => this.togglePause();
+      }
+      if (btnInventory) {
+        btnInventory.onclick = () => this.toggleModal("screen-inventory");
+      }
+      if (btnSkills) {
+        btnSkills.onclick = () => this.toggleModal("screen-skill-tree");
+      }
+      if (btnQuests) {
+        btnQuests.onclick = () => this.toggleModal("screen-quest-log");
+      }
+      if (btnSave) {
+        btnSave.onclick = () => {
+          SecuritySaveManager.saveGame("quick_save", {
+            slotId: "quick_save",
+            timestamp: Date.now(),
+            playerLevel: this.level,
+            characterClass: this.selectedClass,
+            gold: this.gold,
+            inventory: [],
+            completedQuests: [],
+            worldFlags: []
+          });
+          this.showToast("\u{1F4BE} Game Saved Successfully with HMAC Verification!");
+        };
+      }
+      if (btnAudio) {
+        btnAudio.onclick = () => {
+          this.audioMuted = !this.audioMuted;
+          btnAudio.innerText = this.audioMuted ? "\u{1F507} Audio OFF" : "\u{1F50A} Audio ON";
+          this.showToast(this.audioMuted ? "Audio Muted" : "Audio Enabled");
+        };
+      }
+      const btnStart = document.getElementById("btn-menu-start");
+      if (btnStart) {
+        btnStart.onclick = () => {
+          this.switchScreen("screen-class-select");
+        };
+      }
+      const cards = document.querySelectorAll(".class-card");
+      cards.forEach((card) => {
+        card.addEventListener("click", () => {
+          cards.forEach((c) => c.classList.remove("selected"));
+          card.classList.add("selected");
+          this.selectedClass = card.getAttribute("data-class") || "Warrior";
+        });
+      });
+      const btnConfirmClass = document.getElementById("btn-confirm-class");
+      if (btnConfirmClass) {
+        btnConfirmClass.onclick = () => {
+          this.initGameForSelectedClass();
+          this.hideAllScreens();
+          this.stateEngine.setState("Exploring");
+          this.showToast("\u2694\uFE0F Entered Dungeon as " + this.selectedClass + "!");
+        };
+      }
+      document.getElementById("btn-close-pause")?.addEventListener("click", () => this.resumeGame());
+      document.getElementById("btn-pause-resume")?.addEventListener("click", () => this.resumeGame());
+      document.getElementById("btn-close-inventory")?.addEventListener("click", () => this.hideModal("screen-inventory"));
+      document.getElementById("btn-close-skills")?.addEventListener("click", () => this.hideModal("screen-skill-tree"));
+      document.getElementById("btn-close-quests")?.addEventListener("click", () => this.hideModal("screen-quest-log"));
+      document.getElementById("btn-pause-mainmenu")?.addEventListener("click", () => {
+        this.hideAllScreens();
+        this.switchScreen("screen-main-menu");
+        this.stateEngine.setState("MainMenu");
+      });
+    }
+    switchScreen(screenId) {
+      document.querySelectorAll(".overlay-screen").forEach((s) => s.classList.remove("visible"));
+      const target = document.getElementById(screenId);
+      if (target) target.classList.add("visible");
+    }
+    hideAllScreens() {
+      document.querySelectorAll(".overlay-screen").forEach((s) => s.classList.remove("visible"));
+    }
+    toggleModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+      if (modal.classList.contains("visible")) {
+        modal.classList.remove("visible");
+        if (this.stateEngine.getState() === "Paused") {
+          this.stateEngine.setState("Exploring");
+        }
+      } else {
+        this.hideAllScreens();
+        modal.classList.add("visible");
+        this.stateEngine.setState("Paused");
+      }
+    }
+    hideModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove("visible");
+      if (this.stateEngine.getState() === "Paused") {
+        this.stateEngine.setState("Exploring");
+      }
+    }
+    togglePause() {
+      if (this.stateEngine.getState() === "Paused") {
+        this.resumeGame();
+      } else {
+        this.switchScreen("screen-pause");
+        this.stateEngine.setState("Paused");
+      }
+    }
+    resumeGame() {
+      this.hideAllScreens();
+      this.stateEngine.setState("Exploring");
+    }
+    initGameForSelectedClass() {
+      const classDef = ClassSystem.getClass(this.selectedClass);
+      this.playerHp = classDef.className === "Warrior" ? 140 : 100;
+      this.playerMaxHp = this.playerHp;
+      this.playerResource = classDef.maxResource;
+      this.playerMaxResource = classDef.maxResource;
+      this.spawnEntitiesAndPowerups();
+    }
+    spawnEntitiesAndPowerups() {
+      this.enemies = [];
+      this.powerups = [];
       if (this.dungeonData.rooms.length > 0) {
         const startRoom = this.dungeonData.rooms[0];
         this.playerPos.set((startRoom.x + startRoom.width / 2) * 32, (startRoom.y + startRoom.height / 2) * 32);
@@ -341,12 +674,25 @@
       for (let i = 1; i < this.dungeonData.rooms.length; i++) {
         const rm = this.dungeonData.rooms[i];
         const def = enemyDefs[i % enemyDefs.length];
+        const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
         this.enemies.push({
-          pos: new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32),
+          pos: center.clone(),
           hp: def.maxHp,
           maxHp: def.maxHp,
           name: def.name,
-          color: colors[i % colors.length]
+          color: colors[i % colors.length],
+          speed: def.speed
+        });
+        const types = ["health", "mana", "gold", "speed", "shield"];
+        const pType = types[i % types.length];
+        const pColor = pType === "health" ? "#ef4444" : pType === "mana" ? "#3b82f6" : pType === "gold" ? "#fbbf24" : "#10b981";
+        this.powerups.push({
+          pos: new Vector2D(center.x + (Math.random() - 0.5) * 60, center.y + (Math.random() - 0.5) * 60),
+          type: pType,
+          color: pColor,
+          name: pType.toUpperCase() + " ELIXIR",
+          size: 10,
+          pulseTimer: 0
         });
       }
     }
@@ -354,41 +700,75 @@
       window.addEventListener("keydown", (e) => {
         this.keys.add(e.key.toLowerCase());
         if (e.key === " ") {
-          this.playerAttack();
+          if (this.stateEngine.getState() === "Exploring" || this.stateEngine.getState() === "InCombat") {
+            this.playerAttack();
+          }
         }
-        if (e.key === "e" || e.key === "E") {
-          this.audio.playPickup();
-          this.particles.emit(this.playerPos, 25, "#38bdf8");
-        }
+        if (e.key === "i" || e.key === "I") this.toggleModal("screen-inventory");
+        if (e.key === "k" || e.key === "K") this.toggleModal("screen-skill-tree");
+        if (e.key === "q" || e.key === "Q") this.toggleModal("screen-quest-log");
+        if (e.key === "Escape") this.togglePause();
       });
       window.addEventListener("keyup", (e) => {
         this.keys.delete(e.key.toLowerCase());
       });
       this.canvas.addEventListener("click", (e) => {
+        if (this.stateEngine.getState() !== "Exploring" && this.stateEngine.getState() !== "InCombat") return;
         const rect = this.canvas.getBoundingClientRect();
         const clickPos = new Vector2D(e.clientX - rect.left, e.clientY - rect.top);
         this.particles.emit(clickPos, 30, "#f59e0b");
-        this.audio.playSwordSwing();
+        if (!this.audioMuted) this.audio.playSwordSwing();
       });
     }
     playerAttack() {
-      this.audio.playSwordSwing();
+      if (!this.audioMuted) this.audio.playSwordSwing();
       this.particles.emit(this.playerPos, 40, "#ef4444");
+      const attackerStats = {
+        attack: this.selectedClass === "Mage" ? 35 : this.selectedClass === "Rogue" ? 28 : 24,
+        defense: 8,
+        critChance: this.selectedClass === "Rogue" ? 0.35 : 0.15,
+        critMultiplier: 1.8,
+        fireResist: 5,
+        frostResist: 5
+      };
+      let hitAny = false;
       this.enemies.forEach((enemy, idx) => {
-        if (enemy.pos.distance(this.playerPos) < 80) {
-          enemy.hp -= 35;
-          this.particles.emit(enemy.pos, 20, "#fbbf24");
+        if (enemy.pos.distance(this.playerPos) < 95) {
+          hitAny = true;
+          const defenderStats = { attack: 10, defense: 4, critChance: 0.05, critMultiplier: 1.2, fireResist: 0, frostResist: 0 };
+          const result = CombatCalculator.calculateDamage(attackerStats, defenderStats);
+          enemy.hp -= result.finalDamage;
+          this.addFloatingText(
+            result.isCrit ? "\u{1F4A5} CRIT " + result.finalDamage : "-" + result.finalDamage,
+            enemy.pos,
+            result.isCrit ? "#fbbf24" : "#ef4444"
+          );
+          this.particles.emit(enemy.pos, 20, result.isCrit ? "#fbbf24" : "#ef4444");
           if (enemy.hp <= 0) {
-            this.audio.playExplosion();
+            if (!this.audioMuted) this.audio.playExplosion();
             this.quests.onKillEnemy("enemy");
-            this.gold += 25;
+            this.gold += 35;
+            this.xp += 40;
+            this.addFloatingText("+40 XP", this.playerPos, "#38bdf8");
+            if (this.xp >= this.maxXp) {
+              this.level++;
+              this.xp -= this.maxXp;
+              this.maxXp = Math.floor(this.maxXp * 1.5);
+              this.playerMaxHp += 20;
+              this.playerHp = this.playerMaxHp;
+              this.showToast("\u{1F31F} LEVEL UP! You reached Level " + this.level + "!");
+            }
             this.enemies.splice(idx, 1);
           }
         }
       });
+      if (hitAny) {
+        this.stateEngine.setState("InCombat");
+      }
     }
     update(dt) {
-      const speed = 180;
+      if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
+      const speed = this.selectedClass === "Rogue" ? 220 : 180;
       this.playerVel.zero();
       if (this.keys.has("w") || this.keys.has("arrowup")) this.playerVel.y -= 1;
       if (this.keys.has("s") || this.keys.has("arrowdown")) this.playerVel.y += 1;
@@ -401,20 +781,43 @@
           this.particles.emit(this.playerPos, 2, "#38bdf8");
         }
       }
-      if (Math.random() < 0.05) {
-        const randomPos = new Vector2D(
-          this.playerPos.x + (Math.random() - 0.5) * 600,
-          this.playerPos.y + (Math.random() - 0.5) * 400
-        );
-        this.particles.emit(randomPos, 1, "#10b981");
+      for (let i = this.powerups.length - 1; i >= 0; i--) {
+        const p = this.powerups[i];
+        p.pulseTimer += dt;
+        if (p.pos.distance(this.playerPos) < 28) {
+          if (!this.audioMuted) this.audio.playPickup();
+          if (p.type === "health") {
+            this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 35);
+            this.addFloatingText("+35 HP", this.playerPos, "#ef4444");
+          } else if (p.type === "mana") {
+            this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 40);
+            this.addFloatingText("+40 RESOURCE", this.playerPos, "#3b82f6");
+          } else if (p.type === "gold") {
+            this.gold += 50;
+            this.addFloatingText("+50 GOLD \u{1F4B0}", this.playerPos, "#fbbf24");
+          } else {
+            this.showToast("\u2728 Powerup Activated: " + p.name + "!");
+          }
+          this.particles.emit(this.playerPos, 25, p.color);
+          this.powerups.splice(i, 1);
+        }
+      }
+      for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+        const ft = this.floatingTexts[i];
+        ft.life -= dt;
+        ft.pos.y -= 30 * dt;
+        if (ft.life <= 0) {
+          this.floatingTexts.splice(i, 1);
+        }
       }
       this.particles.update(dt);
     }
     render() {
       const width = this.canvas.width;
       const height = this.canvas.height;
-      this.ctx.fillStyle = "#050608";
+      this.ctx.fillStyle = "#030712";
       this.ctx.fillRect(0, 0, width, height);
+      if (this.stateEngine.getState() === "MainMenu") return;
       this.ctx.save();
       const camX = width / 2 - this.playerPos.x;
       const camY = height / 2 - this.playerPos.y;
@@ -436,6 +839,16 @@
           }
         }
       }
+      this.powerups.forEach((p) => {
+        const pulse = Math.sin(p.pulseTimer * 6) * 3;
+        this.ctx.beginPath();
+        this.ctx.arc(p.pos.x, p.pos.y, p.size + pulse, 0, Math.PI * 2);
+        this.ctx.fillStyle = p.color;
+        this.ctx.shadowColor = p.color;
+        this.ctx.shadowBlur = 15;
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+      });
       this.enemies.forEach((e) => {
         this.ctx.beginPath();
         this.ctx.arc(e.pos.x, e.pos.y, 14, 0, Math.PI * 2);
@@ -444,7 +857,7 @@
         this.ctx.shadowBlur = 12;
         this.ctx.fill();
         this.ctx.shadowBlur = 0;
-        this.ctx.font = "11px Segoe UI";
+        this.ctx.font = "11px Inter";
         this.ctx.fillStyle = "#f87171";
         this.ctx.fillText(e.name, e.pos.x - 30, e.pos.y - 22);
         this.ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -461,22 +874,22 @@
         this.ctx.fill();
         this.ctx.shadowBlur = 0;
       });
+      const pColor = this.selectedClass === "Warrior" ? "#ef4444" : this.selectedClass === "Mage" ? "#a855f7" : "#38bdf8";
       this.ctx.beginPath();
       this.ctx.arc(this.playerPos.x, this.playerPos.y, 16, 0, Math.PI * 2);
-      this.ctx.fillStyle = "#38bdf8";
-      this.ctx.shadowColor = "#38bdf8";
-      this.ctx.shadowBlur = 20;
+      this.ctx.fillStyle = pColor;
+      this.ctx.shadowColor = pColor;
+      this.ctx.shadowBlur = 25;
       this.ctx.fill();
       this.ctx.lineWidth = 3;
       this.ctx.strokeStyle = "#ffffff";
       this.ctx.stroke();
       this.ctx.shadowBlur = 0;
-      this.ctx.beginPath();
-      this.ctx.moveTo(this.playerPos.x, this.playerPos.y);
-      this.ctx.lineTo(this.playerPos.x + 22, this.playerPos.y);
-      this.ctx.strokeStyle = "#60a5fa";
-      this.ctx.lineWidth = 4;
-      this.ctx.stroke();
+      this.floatingTexts.forEach((ft) => {
+        this.ctx.font = "bold 14px Inter";
+        this.ctx.fillStyle = ft.color;
+        this.ctx.fillText(ft.text, ft.pos.x - 15, ft.pos.y);
+      });
       this.ctx.restore();
       this.renderHUD(width, height);
     }
@@ -486,23 +899,23 @@
       this.ctx.lineWidth = 2;
       this.ctx.fillRect(20, 20, 360, 95);
       this.ctx.strokeRect(20, 20, 360, 95);
-      this.ctx.font = "bold 18px Segoe UI";
+      this.ctx.font = "bold 16px Inter";
       this.ctx.fillStyle = "#38bdf8";
-      this.ctx.fillText("OMNIQUEST - Lvl " + this.level + " Hero", 35, 45);
+      this.ctx.fillText("HERO: " + this.selectedClass.toUpperCase() + " (Lvl " + this.level + ")", 35, 45);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       this.ctx.fillRect(35, 55, 220, 16);
       this.ctx.fillStyle = "#ef4444";
       this.ctx.fillRect(35, 55, this.playerHp / this.playerMaxHp * 220, 16);
-      this.ctx.font = "bold 11px Segoe UI";
+      this.ctx.font = "bold 11px Inter";
       this.ctx.fillStyle = "#ffffff";
       this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 45, 67);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       this.ctx.fillRect(35, 76, 220, 14);
       this.ctx.fillStyle = "#3b82f6";
-      this.ctx.fillRect(35, 76, this.playerMana / this.playerMaxMana * 220, 14);
+      this.ctx.fillRect(35, 76, this.playerResource / this.playerMaxResource * 220, 14);
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("Mana: " + this.playerMana + " / " + this.playerMaxMana, 45, 87);
-      this.ctx.font = "bold 14px Segoe UI";
+      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 45, 87);
+      this.ctx.font = "bold 14px Inter";
       this.ctx.fillStyle = "#fbbf24";
       this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 270, 70);
       const mmSize = 120;
@@ -520,16 +933,6 @@
         6,
         6
       );
-      this.ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-      this.ctx.fillRect(20, height - 50, width - 40, 35);
-      this.ctx.strokeRect(20, height - 50, width - 40, 35);
-      this.ctx.font = "13px Segoe UI";
-      this.ctx.fillStyle = "#94a3b8";
-      this.ctx.fillText(
-        "\u{1F3AE} Controls: WASD / Arrow Keys = Move | SPACE = Attack | E = Special SFX / Pickup | Click = Swing Weapon & Emit Particles",
-        35,
-        height - 28
-      );
     }
     startLoop() {
       let lastTime = performance.now();
@@ -545,10 +948,10 @@
   };
   if (typeof document !== "undefined") {
     window.addEventListener("DOMContentLoaded", () => {
-      new BrowserGameApp();
+      new AAAFullGameApp();
     });
     if (document.readyState === "complete" || document.readyState === "interactive") {
-      new BrowserGameApp();
+      new AAAFullGameApp();
     }
   }
 })();

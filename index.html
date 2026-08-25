@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Omniquest - 2D Action RPG Engine</title>
+  <title>Omniquest: Realm of Shadows - Action RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * {
       box-sizing: border-box;
@@ -15,30 +18,463 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #0b0d12;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #e2e8f0;
+      background-color: #05070c;
+      font-family: 'Inter', sans-serif;
+      color: #f1f5f9;
     }
-    #game-container {
+    
+    #app-container {
       position: relative;
       width: 100vw;
       height: 100vh;
       display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at center, #0f172a 0%, #05070c 100%);
+    }
+
+    /* Top Navigation Bar */
+    header#top-navbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .brand-logo {
+      font-family: 'Cinzel', serif;
+      font-size: 22px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    /* Game Canvas Viewport */
+    #viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
       justify-content: center;
       align-items: center;
     }
+
     canvas#gameCanvas {
-      background-color: #050608;
-      box-shadow: 0 0 35px rgba(56, 189, 248, 0.2);
-      border: 1px solid #1e293b;
+      background-color: #030712;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Screens & Modals Overlay */
+    .overlay-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 7, 12, 0.92);
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .overlay-screen.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Main Title Screen */
+    .title-banner {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .title-banner h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 56px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #f0f9ff 0%, #38bdf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 40px rgba(56, 189, 248, 0.4);
+      letter-spacing: 4px;
+      margin-bottom: 12px;
+    }
+
+    .title-banner p {
+      color: #94a3b8;
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .menu-button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 320px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border: 1px solid #38bdf8;
+      color: #ffffff;
+      padding: 16px;
       border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+      text-align: center;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(56, 189, 248, 0.6);
+    }
+
+    .btn-secondary {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: #94a3b8;
+      color: #ffffff;
+    }
+
+    /* Class Selection Cards */
+    .class-card-grid {
+      display: flex;
+      gap: 24px;
+      margin-top: 30px;
+    }
+
+    .class-card {
+      width: 260px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .class-card:hover, .class-card.selected {
+      border-color: #38bdf8;
+      transform: translateY(-6px);
+      box-shadow: 0 10px 30px rgba(56, 189, 248, 0.3);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .class-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .class-name {
+      font-family: 'Cinzel', serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 8px;
+    }
+
+    .class-role {
+      font-size: 12px;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .class-stats {
+      width: 100%;
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    /* Modal Overlay Component */
+    .modal-box {
+      width: 520px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+    }
+
+    .modal-title {
+      font-family: 'Cinzel', serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #38bdf8;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .modal-close:hover { color: #ffffff; }
+
+    /* Notification Toasts */
+    #toast-container {
+      position: absolute;
+      bottom: 60px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 300;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: rgba(15, 23, 42, 0.9);
+      border-left: 4px solid #38bdf8;
+      color: #f8fafc;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
     }
   </style>
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+  <div id="app-container">
+    <!-- Top Navigation Header -->
+    <header id="top-navbar">
+      <div class="brand-logo">
+        <span>⚔️</span> OMNIQUEST
+      </div>
+      <div class="nav-controls">
+        <button id="btn-nav-pause" class="nav-btn">⏸️ Pause</button>
+        <button id="btn-nav-inventory" class="nav-btn">🎒 Inventory (I)</button>
+        <button id="btn-nav-skills" class="nav-btn">✨ Skill Tree (K)</button>
+        <button id="btn-nav-quests" class="nav-btn">📜 Quests (Q)</button>
+        <button id="btn-nav-save" class="nav-btn">💾 Quick Save</button>
+        <button id="btn-nav-audio" class="nav-btn">🔊 Audio ON</button>
+      </div>
+    </header>
+
+    <!-- Main Game Canvas Viewport -->
+    <main id="viewport">
+      <canvas id="gameCanvas" width="1280" height="720"></canvas>
+    </main>
+
+    <!-- Notification Toasts Feed -->
+    <div id="toast-container"></div>
+
+    <!-- MAIN TITLE START MENU SCREEN -->
+    <div id="screen-main-menu" class="overlay-screen visible">
+      <div class="title-banner">
+        <h1>OMNIQUEST</h1>
+        <p>Realm of Shadows & Procedural Catacombs</p>
+      </div>
+      <div class="menu-button-group">
+        <button id="btn-menu-start" class="btn-primary">▶️ START NEW GAME</button>
+        <button id="btn-menu-load" class="btn-secondary">📂 LOAD SAVED GAME</button>
+        <button id="btn-menu-settings" class="btn-secondary">⚙️ OPTIONS & CONTROLS</button>
+      </div>
+    </div>
+
+    <!-- CHARACTER CLASS SELECTION SCREEN -->
+    <div id="screen-class-select" class="overlay-screen">
+      <div class="title-banner">
+        <h1>CHOOSE YOUR HERO</h1>
+        <p>Select your combat class and enter the dungeon</p>
+      </div>
+      <div class="class-card-grid">
+        <div class="class-card selected" data-class="Warrior">
+          <div class="class-icon">🛡️</div>
+          <div class="class-name">WARRIOR</div>
+          <div class="class-role">Melee Tank / Berserker</div>
+          <div class="class-stats">
+            ❤️ High Health (120 HP)<br>
+            ⚡ Resource: Stamina<br>
+            ⚔️ Attack: Heavy Slash & Whirlwind<br>
+            🛡️ High Armor Mitigation
+          </div>
+        </div>
+
+        <div class="class-card" data-class="Mage">
+          <div class="class-icon">🔮</div>
+          <div class="class-name">MAGE</div>
+          <div class="class-role">Elemental Sorcerer</div>
+          <div class="class-stats">
+            💙 High Mana (150 MP)<br>
+            ⚡ Resource: Mana Pool<br>
+            🔥 Attack: Fireball & Arcane Blink<br>
+            💥 High Spell Burst Damage
+          </div>
+        </div>
+
+        <div class="class-card" data-class="Rogue">
+          <div class="class-icon">🗡️</div>
+          <div class="class-name">ROGUE</div>
+          <div class="class-role">Shadow Assassin</div>
+          <div class="class-stats">
+            💛 High Mobility & Crit<br>
+            ⚡ Resource: Energy<br>
+            🗡️ Attack: Poison Dagger & Smoke<br>
+            🎯 25% Critical Strike Chance
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 30px;">
+        <button id="btn-confirm-class" class="btn-primary" style="width: 260px;">ENTER THE DUNGEON ⚔️</button>
+      </div>
+    </div>
+
+    <!-- PAUSE MODAL OVERLAY -->
+    <div id="screen-pause" class="overlay-screen">
+      <div class="modal-box">
+        <div class="modal-header">
+          <div class="modal-title">⏸️ GAME PAUSED</div>
+          <button id="btn-close-pause" class="modal-close">✕</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button id="btn-pause-resume" class="btn-primary">RESUME GAME</button>
+          <button id="btn-pause-save" class="btn-secondary">💾 SAVE TO SLOT 1</button>
+          <button id="btn-pause-mainmenu" class="btn-secondary">🏠 RETURN TO MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTORY MODAL OVERLAY -->
+    <div id="screen-inventory" class="overlay-screen">
+      <div class="modal-box" style="width: 600px;">
+        <div class="modal-header">
+          <div class="modal-title">🎒 HERO INVENTORY & GEAR</div>
+          <button id="btn-close-inventory" class="modal-close">✕</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;" id="inventory-grid-container">
+          <!-- Dynamically populated inventory slots -->
+        </div>
+      </div>
+    </div>
+
+    <!-- SKILL TREE MODAL OVERLAY -->
+    <div id="screen-skill-tree" class="overlay-screen">
+      <div class="modal-box" style="width: 640px;">
+        <div class="modal-header">
+          <div class="modal-title">✨ TALENT MATRIX & SKILL TREE</div>
+          <button id="btn-close-skills" class="modal-close">✕</button>
+        </div>
+        <div id="skill-tree-container" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- Dynamically populated skill tree nodes -->
+        </div>
+      </div>
+    </div>
+
+    <!-- QUEST LOG MODAL OVERLAY -->
+    <div id="screen-quest-log" class="overlay-screen">
+      <div class="modal-box" style="width: 580px;">
+        <div class="modal-header">
+          <div class="modal-title">📜 QUEST JOURNAL</div>
+          <button id="btn-close-quests" class="modal-close">✕</button>
+        </div>
+        <div id="quest-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- Dynamically populated quest list -->
+        </div>
+      </div>
+    </div>
   </div>
+
   <script src="dist/bundle.js"></script>
 </body>
 </html>
