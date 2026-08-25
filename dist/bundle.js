@@ -481,12 +481,13 @@
       __publicField(this, "floatingTexts", []);
       __publicField(this, "audioMuted", false);
       __publicField(this, "screenShake", 0);
-      // Hero Powers (1, 2, 3, 4)
+      // Hero Powers (1, 2, 3, 4, 5)
       __publicField(this, "heroSkills", [
-        { id: "skill_1", name: "Primary Strike", icon: "\u2694\uFE0F", hotkey: "1", cooldown: 0, maxCooldown: 0.5, manaCost: 5 },
-        { id: "skill_2", name: "Whirlwind / Nova", icon: "\u{1F300}", hotkey: "2", cooldown: 0, maxCooldown: 3, manaCost: 25 },
-        { id: "skill_3", name: "Shield / Barrier", icon: "\u{1F6E1}\uFE0F", hotkey: "3", cooldown: 0, maxCooldown: 6, manaCost: 30 },
-        { id: "skill_4", name: "ULTIMATE METEOR", icon: "\u{1F31F}", hotkey: "4", cooldown: 0, maxCooldown: 12, manaCost: 50 }
+        { id: "skill_1", name: "Primary Strike", icon: "\u2694\uFE0F", hotkey: "1", cooldown: 0, maxCooldown: 0.4, manaCost: 5 },
+        { id: "skill_2", name: "Whirlwind / Nova", icon: "\u{1F300}", hotkey: "2", cooldown: 0, maxCooldown: 2.5, manaCost: 20 },
+        { id: "skill_3", name: "Shield / Barrier", icon: "\u{1F6E1}\uFE0F", hotkey: "3", cooldown: 0, maxCooldown: 5, manaCost: 25 },
+        { id: "skill_4", name: "ULTIMATE METEOR", icon: "\u{1F31F}", hotkey: "4", cooldown: 0, maxCooldown: 10, manaCost: 45 },
+        { id: "skill_5", name: "Divine Healing", icon: "\u{1F9EA}", hotkey: "5", cooldown: 0, maxCooldown: 6, manaCost: 15 }
       ]);
       if (typeof document === "undefined") return;
       this.canvas = document.getElementById("gameCanvas");
@@ -668,6 +669,7 @@
         if (e.key === "2") this.castHeroSkill(1);
         if (e.key === "3") this.castHeroSkill(2);
         if (e.key === "4") this.castHeroSkill(3);
+        if (e.key === "5") this.castHeroSkill(4);
         if (e.key === " ") {
           if (this.stateEngine.getState() === "Exploring" || this.stateEngine.getState() === "InCombat") {
             this.castHeroSkill(0);
@@ -686,6 +688,7 @@
         this.castHeroSkill(0);
       });
     }
+    // Hero Powers Casting Logic (1, 2, 3, 4, 5)
     castHeroSkill(index) {
       if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
       const skill = this.heroSkills[index];
@@ -721,6 +724,13 @@
           this.particles.emit(e.pos, 40, "#f59e0b");
         });
         this.showToast("\u{1F31F} ULTIMATE METEOR STRIKE CLEARED THE DUNGEON!");
+      } else if (index === 4) {
+        if (!this.audioMuted) this.audio.playPickup();
+        const healAmt = 50;
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + healAmt);
+        this.particles.emit(this.playerPos, 60, "#22c55e");
+        this.addFloatingText("\u{1F9EA} +50 HEAL HP", this.playerPos, "#22c55e");
+        this.showToast("\u{1F9EA} Divine Healing Power Used! +50 HP");
       }
     }
     dealAreaDamage(radius, damageAmount, isSpecial) {
@@ -754,6 +764,9 @@
     }
     update(dt) {
       if (this.stateEngine.getState() === "Paused" || this.stateEngine.getState() === "MainMenu") return;
+      if (this.playerResource < this.playerMaxResource) {
+        this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 18 * dt);
+      }
       this.heroSkills.forEach((s) => {
         if (s.cooldown > 0) {
           s.cooldown = Math.max(0, s.cooldown - dt);
@@ -928,13 +941,13 @@
       this.ctx.fillRect(30, hudY + 35, this.playerHp / this.playerMaxHp * 220, 16);
       this.ctx.font = "bold 11px Inter";
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("HP: " + this.playerHp + " / " + this.playerMaxHp, 40, hudY + 47);
+      this.ctx.fillText("HP: " + Math.round(this.playerHp) + " / " + this.playerMaxHp, 40, hudY + 47);
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       this.ctx.fillRect(30, hudY + 56, 220, 14);
       this.ctx.fillStyle = "#3b82f6";
       this.ctx.fillRect(30, hudY + 56, this.playerResource / this.playerMaxResource * 220, 14);
       this.ctx.fillStyle = "#ffffff";
-      this.ctx.fillText("ENERGY: " + this.playerResource + " / " + this.playerMaxResource, 40, hudY + 67);
+      this.ctx.fillText("ENERGY: " + Math.round(this.playerResource) + " / " + this.playerMaxResource, 40, hudY + 67);
       this.ctx.font = "bold 14px Inter";
       this.ctx.fillStyle = "#fbbf24";
       this.ctx.fillText("\u{1F4B0} " + this.gold + " Gold", 265, hudY + 50);
@@ -953,21 +966,21 @@
         6,
         6
       );
-      const barWidth = 340;
+      const barWidth = 430;
       const barX = width / 2 - barWidth / 2;
       const barY = height - 65;
       this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
       this.ctx.fillRect(barX, barY, barWidth, 55);
       this.ctx.strokeRect(barX, barY, barWidth, 55);
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         const skill = this.heroSkills[i];
-        const slotX = barX + 15 + i * 80;
+        const slotX = barX + 12 + i * 82;
         const slotY = barY + 8;
         this.ctx.fillStyle = skill.cooldown > 0 ? "rgba(30, 41, 59, 0.6)" : "rgba(30, 41, 59, 0.95)";
-        this.ctx.fillRect(slotX, slotY, 70, 40);
+        this.ctx.fillRect(slotX, slotY, 74, 40);
         this.ctx.strokeStyle = skill.cooldown > 0 ? "#475569" : "#38bdf8";
-        this.ctx.strokeRect(slotX, slotY, 70, 40);
-        this.ctx.font = "16px Inter";
+        this.ctx.strokeRect(slotX, slotY, 74, 40);
+        this.ctx.font = "15px Inter";
         this.ctx.fillStyle = "#ffffff";
         this.ctx.fillText(skill.icon + " (" + skill.hotkey + ")", slotX + 10, slotY + 24);
         if (skill.cooldown > 0) {
