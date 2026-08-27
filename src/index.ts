@@ -10,7 +10,7 @@ import { ClassSystem, CharacterClass } from './gameplay/ClassSystem';
 import { SecuritySaveManager } from './storage/SecuritySaveManager';
 import { CombatCalculator, EntityCombatStats } from './gameplay/CombatCalculator';
 
-console.log('--- Omniquest: Realm of Shadows Engine ---');
+console.log('--- Omniquest: Realm of Shadows Engine (3-Level Campaign) ---');
 
 interface PowerUp {
   pos: Vector2D;
@@ -29,6 +29,19 @@ interface ActiveSkill {
   cooldown: number;
   maxCooldown: number;
   manaCost: number;
+}
+
+interface DungeonEnemy {
+  pos: Vector2D;
+  hp: number;
+  maxHp: number;
+  name: string;
+  color: string;
+  speed: number;
+  attackCooldown: number;
+  flashTimer: number;
+  isBoss?: boolean;
+  size?: number;
 }
 
 class AAAFullGameApp {
@@ -50,13 +63,23 @@ class AAAFullGameApp {
   private xp = 0;
   private maxXp = 100;
 
+  // 3-Level Progression Campaign
+  public dungeonLevel: number = 1; // 1, 2, or 3
+  public score: number = 0;
+  public levelScore: number = 0;
+  public targetScoreLevel1: number = 150;
+  public targetScoreLevel2: number = 350;
+  public isBossDefeated: boolean = false;
+  public enemiesKilled: number = 0;
+  private spawnTimer: number = 0;
+
   private keys: Set<string> = new Set();
   private particles = new ParticleEngine();
   private audio = new AudioSynthesizer();
   private skills = new SkillTreeMatrix();
   private quests = new QuestManager();
   private powerups: PowerUp[] = [];
-  private enemies: Array<{ pos: Vector2D; hp: number; maxHp: number; name: string; color: string; speed: number; attackCooldown: number; flashTimer: number }> = [];
+  private enemies: DungeonEnemy[] = [];
 
   private floatingTexts: Array<{ text: string; pos: Vector2D; color: string; life: number }> = [];
   public audioMuted: boolean = false;
@@ -78,7 +101,9 @@ class AAAFullGameApp {
     if (!this.canvas) return;
     this.ctx = this.canvas.getContext('2d')!;
 
-    this.dungeonData = this.dungeonGen.generate();
+    this.loadDungeonLevel(1);
+    this.stateEngine.setState('MainMenu');
+
     (window as any).gameApp = this;
     this.bindWindowGlobals();
     this.setupInputs();
@@ -173,10 +198,28 @@ class AAAFullGameApp {
     this.playerResource = classDef.maxResource;
     this.playerMaxResource = classDef.maxResource;
 
-    this.spawnEntitiesAndPowerups();
+    this.dungeonLevel = 1;
+    this.score = 0;
+    this.levelScore = 0;
+    this.enemiesKilled = 0;
+    this.isBossDefeated = false;
+
+    this.loadDungeonLevel(1);
     this.hideAllScreens();
     this.stateEngine.setState('Exploring');
-    this.showToast('⚔️ Entered Dungeon as ' + this.selectedClass + '!');
+    this.showToast('⚔️ LEVEL 1: Crypt of Shadows! Defeat enemies to score ' + this.targetScoreLevel1 + ' pts for Level 2!');
+  }
+
+  public loadDungeonLevel(lvl: number): void {
+    this.dungeonLevel = lvl;
+    this.levelScore = 0;
+    this.dungeonData = this.dungeonGen.generate();
+    this.spawnEntitiesAndPowerups();
+
+    if (this.dungeonData.rooms.length > 0) {
+      const startRoom = this.dungeonData.rooms[0];
+      this.playerPos.set((startRoom.x + startRoom.width / 2) * 32, (startRoom.y + startRoom.height / 2) * 32);
+    }
   }
 
   public quickSaveGame(): void {
@@ -238,42 +281,189 @@ class AAAFullGameApp {
       this.playerPos.set((startRoom.x + startRoom.width / 2) * 32, (startRoom.y + startRoom.height / 2) * 32);
     }
 
-    // Balanced Enemy HP for satisfying combat feedback
-    const enemiesList = [
-      { name: 'Goblin Scout', hp: 50, color: '#ef4444', speed: 110 },
-      { name: 'Skeleton Warrior', hp: 80, color: '#a855f7', speed: 90 },
-      { name: 'Shadow Necromancer', hp: 120, color: '#f59e0b', speed: 100 },
-      { name: 'Inferno Dragon Boss', hp: 220, color: '#10b981', speed: 120 }
-    ];
+    if (this.dungeonLevel === 1) {
+      // LEVEL 1: Crypt of Shadows - Goblins & Skeletons
+      const enemiesList = [
+        { name: 'Goblin Scout', hp: 45, color: '#ef4444', speed: 100 },
+        { name: 'Skeleton Minion', hp: 60, color: '#a855f7', speed: 85 }
+      ];
 
-    for (let i = 1; i < this.dungeonData.rooms.length; i++) {
-      const rm = this.dungeonData.rooms[i];
-      const def = enemiesList[i % enemiesList.length];
-      const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
+      for (let i = 1; i < this.dungeonData.rooms.length; i++) {
+        const rm = this.dungeonData.rooms[i];
+        const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
 
+        for (let k = 0; k < 2; k++) {
+          const def = enemiesList[(i + k) % enemiesList.length];
+          this.enemies.push({
+            pos: new Vector2D(center.x + (k * 40 - 20), center.y + (k * 40 - 20)),
+            hp: def.hp,
+            maxHp: def.hp,
+            name: def.name,
+            color: def.color,
+            speed: def.speed,
+            attackCooldown: 0,
+            flashTimer: 0,
+            isBoss: false,
+            size: 16
+          });
+        }
+        this.addRoomPowerup(center, i);
+      }
+    } else if (this.dungeonLevel === 2) {
+      // LEVEL 2: Inferno Caverns - Skeleton Knights, Shadow Necromancers, Fire Imps
+      const enemiesList = [
+        { name: 'Skeleton Knight', hp: 90, color: '#a855f7', speed: 100 },
+        { name: 'Shadow Necromancer', hp: 120, color: '#f59e0b', speed: 110 },
+        { name: 'Inferno Imp', hp: 80, color: '#ef4444', speed: 130 }
+      ];
+
+      for (let i = 1; i < this.dungeonData.rooms.length; i++) {
+        const rm = this.dungeonData.rooms[i];
+        const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
+
+        for (let k = 0; k < 2; k++) {
+          const def = enemiesList[(i + k) % enemiesList.length];
+          this.enemies.push({
+            pos: new Vector2D(center.x + (k * 40 - 20), center.y + (k * 40 - 20)),
+            hp: def.hp,
+            maxHp: def.hp,
+            name: def.name,
+            color: def.color,
+            speed: def.speed,
+            attackCooldown: 0,
+            flashTimer: 0,
+            isBoss: false,
+            size: 16
+          });
+        }
+        this.addRoomPowerup(center, i);
+      }
+    } else {
+      // LEVEL 3: Abyssal Throne - Elite Guards + FINAL BIG BOSS ENEMY
+      const lastRoomIdx = this.dungeonData.rooms.length - 1;
+
+      for (let i = 1; i < lastRoomIdx; i++) {
+        const rm = this.dungeonData.rooms[i];
+        const center = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
+
+        this.enemies.push({
+          pos: center.clone(),
+          hp: 110,
+          maxHp: 110,
+          name: 'Abyssal Royal Guard',
+          color: '#8b5cf6',
+          speed: 105,
+          attackCooldown: 0,
+          flashTimer: 0,
+          isBoss: false,
+          size: 18
+        });
+        this.addRoomPowerup(center, i);
+      }
+
+      // Final Big Boss
+      if (lastRoomIdx >= 1) {
+        const bossRoom = this.dungeonData.rooms[lastRoomIdx];
+        const bossCenter = new Vector2D((bossRoom.x + bossRoom.width / 2) * 32, (bossRoom.y + bossRoom.height / 2) * 32);
+
+        this.enemies.push({
+          pos: bossCenter.clone(),
+          hp: 500,
+          maxHp: 500,
+          name: '👑 ABYSSAL DEMON OVERLORD (FINAL BOSS)',
+          color: '#dc2626',
+          speed: 125,
+          attackCooldown: 0,
+          flashTimer: 0,
+          isBoss: true,
+          size: 34
+        });
+      }
+    }
+  }
+
+  private spawnEnemyPatrol(): void {
+    if (!this.dungeonData || !this.dungeonData.rooms || this.dungeonData.rooms.length === 0) return;
+
+    const availableRooms = this.dungeonData.rooms.filter(rm => {
+      const rmCenter = new Vector2D((rm.x + rm.width / 2) * 32, (rm.y + rm.height / 2) * 32);
+      return rmCenter.distance(this.playerPos) > 180;
+    });
+
+    const targetRoom = availableRooms.length > 0
+      ? availableRooms[Math.floor(Math.random() * availableRooms.length)]
+      : this.dungeonData.rooms[Math.floor(Math.random() * this.dungeonData.rooms.length)];
+
+    const center = new Vector2D(
+      (targetRoom.x + Math.random() * targetRoom.width) * 32,
+      (targetRoom.y + Math.random() * targetRoom.height) * 32
+    );
+
+    if (this.dungeonLevel === 1) {
+      const isGoblin = Math.random() > 0.5;
       this.enemies.push({
-        pos: center.clone(),
+        pos: center,
+        hp: isGoblin ? 45 : 60,
+        maxHp: isGoblin ? 45 : 60,
+        name: isGoblin ? 'Goblin Scout' : 'Skeleton Minion',
+        color: isGoblin ? '#ef4444' : '#a855f7',
+        speed: isGoblin ? 100 : 85,
+        attackCooldown: 0,
+        flashTimer: 0,
+        isBoss: false,
+        size: 16
+      });
+    } else if (this.dungeonLevel === 2) {
+      const roll = Math.random();
+      const def = roll < 0.35 
+        ? { name: 'Skeleton Knight', hp: 90, color: '#a855f7', speed: 100 }
+        : roll < 0.70
+        ? { name: 'Inferno Imp', hp: 80, color: '#ef4444', speed: 130 }
+        : { name: 'Shadow Necromancer', hp: 120, color: '#f59e0b', speed: 110 };
+      this.enemies.push({
+        pos: center,
         hp: def.hp,
         maxHp: def.hp,
         name: def.name,
         color: def.color,
         speed: def.speed,
         attackCooldown: 0,
-        flashTimer: 0
+        flashTimer: 0,
+        isBoss: false,
+        size: 16
       });
-
-      const types: Array<'health' | 'mana' | 'gold' | 'speed' | 'shield'> = ['health', 'mana', 'gold', 'speed', 'shield'];
-      const pType = types[i % types.length];
-      const pColor = pType === 'health' ? '#ef4444' : pType === 'mana' ? '#3b82f6' : pType === 'gold' ? '#fbbf24' : '#10b981';
-      this.powerups.push({
-        pos: new Vector2D(center.x + (Math.random() - 0.5) * 60, center.y + (Math.random() - 0.5) * 60),
-        type: pType,
-        color: pColor,
-        name: pType.toUpperCase() + ' ELIXIR',
-        size: 10,
-        pulseTimer: 0
+    } else if (this.dungeonLevel === 3) {
+      this.enemies.push({
+        pos: center,
+        hp: 110,
+        maxHp: 110,
+        name: 'Abyssal Royal Guard',
+        color: '#8b5cf6',
+        speed: 105,
+        attackCooldown: 0,
+        flashTimer: 0,
+        isBoss: false,
+        size: 18
       });
     }
+
+    if (Math.random() < 0.4) {
+      this.addRoomPowerup(center, Math.floor(Math.random() * 10));
+    }
+  }
+
+  private addRoomPowerup(center: Vector2D, i: number): void {
+    const types: Array<'health' | 'mana' | 'gold' | 'speed' | 'shield'> = ['health', 'mana', 'gold', 'speed', 'shield'];
+    const pType = types[i % types.length];
+    const pColor = pType === 'health' ? '#ef4444' : pType === 'mana' ? '#3b82f6' : pType === 'gold' ? '#fbbf24' : '#10b981';
+    this.powerups.push({
+      pos: new Vector2D(center.x + (Math.random() - 0.5) * 60, center.y + (Math.random() - 0.5) * 60),
+      type: pType,
+      color: pColor,
+      name: pType.toUpperCase() + ' ELIXIR',
+      size: 10,
+      pulseTimer: 0
+    });
   }
 
   private setupInputs(): void {
@@ -358,7 +548,8 @@ class AAAFullGameApp {
   }
 
   private dealAreaDamage(radius: number, damageAmount: number, isSpecial: boolean): void {
-    this.enemies.forEach((enemy, idx) => {
+    for (let idx = this.enemies.length - 1; idx >= 0; idx--) {
+      const enemy = this.enemies[idx];
       if (enemy.pos.distance(this.playerPos) < radius) {
         enemy.hp -= damageAmount;
         enemy.flashTimer = 0.2; // Hit flash
@@ -373,23 +564,96 @@ class AAAFullGameApp {
         if (enemy.hp <= 0) {
           if (!this.audioMuted) this.audio.playExplosion();
           this.quests.onKillEnemy('enemy');
-          this.gold += 45;
-          this.xp += 50;
-          this.addFloatingText('+50 XP', this.playerPos, '#38bdf8');
+          this.enemiesKilled++;
 
+          const killPoints = enemy.isBoss ? 500 : (this.dungeonLevel === 1 ? 50 : this.dungeonLevel === 2 ? 75 : 100);
+          this.score += killPoints;
+          this.levelScore += killPoints;
+          this.gold += enemy.isBoss ? 250 : 45;
+          this.xp += enemy.isBoss ? 300 : 50;
+
+          this.addFloatingText('+' + killPoints + ' SCORE ⭐', this.playerPos, '#fbbf24');
+
+          // Check Level 1 -> Level 2 transition
+          if (this.dungeonLevel === 1 && this.levelScore >= this.targetScoreLevel1) {
+            this.enemies.splice(idx, 1);
+            this.advanceToLevel(2);
+            return;
+          }
+
+          // Check Level 2 -> Level 3 transition
+          if (this.dungeonLevel === 2 && this.levelScore >= this.targetScoreLevel2) {
+            this.enemies.splice(idx, 1);
+            this.advanceToLevel(3);
+            return;
+          }
+
+          // Check Level 3 Boss defeat -> Complete Game!
+          if (this.dungeonLevel === 3 && enemy.isBoss) {
+            this.isBossDefeated = true;
+            this.enemies.splice(idx, 1);
+            this.triggerVictory();
+            return;
+          }
+
+          // Hero Level up progression
           if (this.xp >= this.maxXp) {
             this.level++;
             this.xp -= this.maxXp;
             this.maxXp = Math.floor(this.maxXp * 1.5);
             this.playerMaxHp += 25;
             this.playerHp = this.playerMaxHp;
-            this.showToast('🌟 LEVEL UP! You reached Level ' + this.level + '!');
+            this.showToast('🌟 LEVEL UP! You reached Hero Level ' + this.level + '!');
           }
 
           this.enemies.splice(idx, 1);
         }
       }
-    });
+    }
+  }
+
+  public advanceToLevel(nextLevel: number): void {
+    if (!this.audioMuted) this.audio.playPickup();
+    this.triggerScreenShake(15);
+    this.particles.emit(this.playerPos, 80, '#fbbf24');
+    
+    // Heal player between levels
+    this.playerHp = this.playerMaxHp;
+    this.playerResource = this.playerMaxResource;
+
+    this.loadDungeonLevel(nextLevel);
+
+    if (nextLevel === 2) {
+      this.showToast('🔥 LEVEL 1 COMPLETE! Entering Level 2: Inferno Caverns (Target: ' + this.targetScoreLevel2 + ' Score)');
+      this.addFloatingText('🔥 LEVEL 2: INFERNO CAVERNS', this.playerPos, '#f97316');
+    } else if (nextLevel === 3) {
+      this.showToast('👑 LEVEL 2 COMPLETE! Entering Final Level 3: Slay the Abyssal Demon Overlord!');
+      this.addFloatingText('👑 FINAL BOSS LEVEL: ABYSSAL THRONE', this.playerPos, '#ef4444');
+    }
+  }
+
+  public triggerVictory(): void {
+    if (!this.audioMuted) {
+      this.audio.playExplosion();
+      this.audio.playPickup();
+    }
+    this.triggerScreenShake(30);
+    this.particles.emit(this.playerPos, 150, '#fbbf24');
+    this.stateEngine.setState('Paused');
+
+    const statsEl = document.getElementById('victory-stats-container');
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div style="color: #4ade80; font-size: 20px; font-weight: bold; margin-bottom: 10px;">👑 REALM LIBERATED! 👑</div>
+        <div>🏆 <b>Total Score:</b> ${this.score} pts</div>
+        <div>💀 <b>Enemies Slain:</b> ${this.enemiesKilled}</div>
+        <div>🛡️ <b>Hero Class:</b> ${this.selectedClass} (Level ${this.level})</div>
+        <div>💰 <b>Total Gold:</b> ${this.gold}</div>
+      `;
+    }
+
+    this.showScreen('screen-victory');
+    this.showToast('🏆 CONGRATULATIONS! You defeated the Big Boss and completed Omniquest!');
   }
 
   private update(dt: number): void {
@@ -398,6 +662,16 @@ class AAAFullGameApp {
     // Automatic Energy Regeneration (+20 Energy / sec)
     if (this.playerResource < this.playerMaxResource) {
       this.playerResource = Math.min(this.playerMaxResource, this.playerResource + 20 * dt);
+    }
+
+    // Continuous Enemy Spawning Wave System (Never run out of enemies!)
+    this.spawnTimer += dt;
+    const maxEnemies = this.dungeonLevel === 3 ? 5 : 8;
+    const regularEnemiesCount = this.enemies.filter(e => !e.isBoss).length;
+
+    if (this.spawnTimer >= 3.0 && regularEnemiesCount < maxEnemies) {
+      this.spawnTimer = 0;
+      this.spawnEnemyPatrol();
     }
 
     // Cooldown management for skills
@@ -438,18 +712,22 @@ class AAAFullGameApp {
       }
 
       const distToPlayer = enemy.pos.distance(this.playerPos);
-      if (distToPlayer < 350 && distToPlayer > 28) {
+      const aggroRadius = enemy.isBoss ? 550 : 350;
+      const stopDist = enemy.isBoss ? 45 : 28;
+
+      if (distToPlayer < aggroRadius && distToPlayer > stopDist) {
         const dir = this.playerPos.clone().sub(enemy.pos).normalize();
         enemy.pos.addScaled(dir, enemy.speed * 0.7 * dt);
       }
 
-      if (distToPlayer < 35 && enemy.attackCooldown <= 0) {
-        enemy.attackCooldown = 1.2;
-        const damageDealt = 12;
+      const attackRange = enemy.isBoss ? 50 : 35;
+      if (distToPlayer < attackRange && enemy.attackCooldown <= 0) {
+        enemy.attackCooldown = enemy.isBoss ? 1.5 : 1.2;
+        const damageDealt = enemy.isBoss ? 25 : 12;
         this.playerHp = Math.max(0, this.playerHp - damageDealt);
-        this.addFloatingText('-12 HP 💔', this.playerPos, '#ef4444');
-        this.particles.emit(this.playerPos, 15, '#ef4444');
-        this.triggerScreenShake(6);
+        this.addFloatingText(enemy.isBoss ? '-25 HP 💥' : '-12 HP 💔', this.playerPos, '#ef4444');
+        this.particles.emit(this.playerPos, enemy.isBoss ? 25 : 15, '#ef4444');
+        this.triggerScreenShake(enemy.isBoss ? 12 : 6);
 
         if (this.playerHp <= 0) {
           this.showToast('💀 YOU DIED! Respawning in dungeon...');
@@ -478,8 +756,20 @@ class AAAFullGameApp {
           this.showToast('✨ Powerup Activated: ' + p.name + '!');
         }
 
+        this.score += 25;
+        this.levelScore += 25;
+        this.addFloatingText('+25 SCORE ⭐', this.playerPos, '#fbbf24');
         this.particles.emit(this.playerPos, 25, p.color);
         this.powerups.splice(i, 1);
+
+        if (this.dungeonLevel === 1 && this.levelScore >= this.targetScoreLevel1) {
+          this.advanceToLevel(2);
+          return;
+        }
+        if (this.dungeonLevel === 2 && this.levelScore >= this.targetScoreLevel2) {
+          this.advanceToLevel(3);
+          return;
+        }
       }
     }
 
@@ -521,9 +811,14 @@ class AAAFullGameApp {
         const x = c * tileSize;
         const y = r * tileSize;
         if (grid[r][c] === 0) {
-          this.ctx.fillStyle = (r + c) % 2 === 0 ? '#1e293b' : '#0f172a';
+          const floorColor = this.dungeonLevel === 1 
+            ? ((r + c) % 2 === 0 ? '#1e293b' : '#0f172a')
+            : this.dungeonLevel === 2
+            ? ((r + c) % 2 === 0 ? '#451a03' : '#271003')
+            : ((r + c) % 2 === 0 ? '#311042' : '#190624');
+          this.ctx.fillStyle = floorColor;
           this.ctx.fillRect(x, y, tileSize, tileSize);
-          this.ctx.strokeStyle = '#334155';
+          this.ctx.strokeStyle = this.dungeonLevel === 1 ? '#334155' : this.dungeonLevel === 2 ? '#78350f' : '#581c87';
           this.ctx.strokeRect(x, y, tileSize, tileSize);
         } else {
           this.ctx.fillStyle = '#020617';
@@ -546,28 +841,39 @@ class AAAFullGameApp {
 
     // Enemies with clear hit flash & visible HP decrease
     this.enemies.forEach(e => {
+      const eRadius = e.size || 16;
       this.ctx.beginPath();
-      this.ctx.arc(e.pos.x, e.pos.y, 16, 0, Math.PI * 2);
+      this.ctx.arc(e.pos.x, e.pos.y, eRadius, 0, Math.PI * 2);
       this.ctx.fillStyle = e.flashTimer > 0 ? '#ffffff' : e.color;
-      this.ctx.shadowColor = e.color;
-      this.ctx.shadowBlur = e.flashTimer > 0 ? 25 : 12;
+      this.ctx.shadowColor = e.isBoss ? '#ef4444' : e.color;
+      this.ctx.shadowBlur = e.isBoss ? 35 : (e.flashTimer > 0 ? 25 : 12);
       this.ctx.fill();
       this.ctx.shadowBlur = 0;
 
+      if (e.isBoss) {
+        // Glowing Boss Ring
+        this.ctx.beginPath();
+        this.ctx.arc(e.pos.x, e.pos.y, eRadius + 6, 0, Math.PI * 2);
+        this.ctx.strokeStyle = '#fbbf24';
+        this.ctx.lineWidth = 3;
+        this.ctx.stroke();
+      }
+
       // Enemy Name
-      this.ctx.font = 'bold 11px Inter';
-      this.ctx.fillStyle = '#f87171';
-      this.ctx.fillText(e.name + ' (' + Math.max(0, Math.round(e.hp)) + '/' + e.maxHp + ')', e.pos.x - 45, e.pos.y - 24);
+      this.ctx.font = e.isBoss ? 'bold 13px Inter' : 'bold 11px Inter';
+      this.ctx.fillStyle = e.isBoss ? '#fbbf24' : '#f87171';
+      this.ctx.fillText(e.name + ' (' + Math.max(0, Math.round(e.hp)) + '/' + e.maxHp + ')', e.pos.x - (e.isBoss ? 110 : 45), e.pos.y - (eRadius + 12));
 
       // Enemy HP Bar Background & Red Bar
+      const barW = e.isBoss ? 120 : 60;
       this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
-      this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
+      this.ctx.fillRect(e.pos.x - barW / 2, e.pos.y - (eRadius + 6), barW, 6);
       this.ctx.fillStyle = '#ef4444';
-      const hpWidth = Math.max(0, (e.hp / e.maxHp) * 60);
-      this.ctx.fillRect(e.pos.x - 30, e.pos.y - 18, hpWidth, 6);
-      this.ctx.strokeStyle = '#ffffff';
+      const hpWidth = Math.max(0, (e.hp / e.maxHp) * barW);
+      this.ctx.fillRect(e.pos.x - barW / 2, e.pos.y - (eRadius + 6), hpWidth, 6);
+      this.ctx.strokeStyle = e.isBoss ? '#fbbf24' : '#ffffff';
       this.ctx.lineWidth = 1;
-      this.ctx.strokeRect(e.pos.x - 30, e.pos.y - 18, 60, 6);
+      this.ctx.strokeRect(e.pos.x - barW / 2, e.pos.y - (eRadius + 6), barW, 6);
     });
 
     // Particles
@@ -609,38 +915,86 @@ class AAAFullGameApp {
   private renderHUD(width: number, height: number): void {
     const hudY = 15;
 
-    this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    // Main HUD Container
+    this.ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
     this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
     this.ctx.lineWidth = 2;
+    this.ctx.fillRect(15, hudY, 410, 105);
+    this.ctx.strokeRect(15, hudY, 410, 105);
 
-    this.ctx.fillRect(15, hudY, 360, 95);
-    this.ctx.strokeRect(15, hudY, 360, 95);
-
-    this.ctx.font = 'bold 15px Inter';
+    // Hero Name & Level
+    this.ctx.font = 'bold 14px Inter';
     this.ctx.fillStyle = '#38bdf8';
-    this.ctx.fillText('HERO: ' + this.selectedClass.toUpperCase() + ' (Lvl ' + this.level + ')', 30, hudY + 25);
+    this.ctx.fillText('HERO: ' + this.selectedClass.toUpperCase() + ' (Lvl ' + this.level + ')', 30, hudY + 22);
+
+    // Dungeon Campaign Level Badge
+    this.ctx.fillStyle = this.dungeonLevel === 3 ? '#ef4444' : '#fbbf24';
+    this.ctx.font = 'bold 13px Inter';
+    const levelLabel = this.dungeonLevel === 3 ? 'DUNGEON: LVL 3/3 (BOSS)' : 'DUNGEON: LVL ' + this.dungeonLevel + '/3';
+    this.ctx.fillText(levelLabel, 230, hudY + 22);
 
     // HP Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    this.ctx.fillRect(30, hudY + 35, 220, 16);
+    this.ctx.fillRect(30, hudY + 30, 190, 13);
     this.ctx.fillStyle = '#ef4444';
-    this.ctx.fillRect(30, hudY + 35, (this.playerHp / this.playerMaxHp) * 220, 16);
-    this.ctx.font = 'bold 11px Inter';
+    this.ctx.fillRect(30, hudY + 30, (this.playerHp / this.playerMaxHp) * 190, 13);
+    this.ctx.font = 'bold 10px Inter';
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText('HP: ' + Math.round(this.playerHp) + ' / ' + this.playerMaxHp, 40, hudY + 47);
+    this.ctx.fillText('HP: ' + Math.round(this.playerHp) + ' / ' + this.playerMaxHp, 35, hudY + 40);
 
     // Energy Bar
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    this.ctx.fillRect(30, hudY + 56, 220, 14);
+    this.ctx.fillRect(30, hudY + 47, 190, 13);
     this.ctx.fillStyle = '#3b82f6';
-    this.ctx.fillRect(30, hudY + 56, (this.playerResource / this.playerMaxResource) * 220, 14);
+    this.ctx.fillRect(30, hudY + 47, (this.playerResource / this.playerMaxResource) * 190, 13);
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillText('ENERGY: ' + Math.round(this.playerResource) + ' / ' + this.playerMaxResource, 40, hudY + 67);
+    this.ctx.fillText('ENERGY: ' + Math.round(this.playerResource) + ' / ' + this.playerMaxResource, 35, hudY + 57);
 
-    // Gold
-    this.ctx.font = 'bold 14px Inter';
+    // Level Progress / Goal Bar
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(30, hudY + 65, 375, 20);
+    this.ctx.fillStyle = this.dungeonLevel === 3 ? '#ef4444' : '#fbbf24';
+    const targetScore = this.dungeonLevel === 1 ? this.targetScoreLevel1 : this.dungeonLevel === 2 ? this.targetScoreLevel2 : 1;
+    const scoreProgress = this.dungeonLevel === 3 ? 1 : Math.min(1, this.levelScore / targetScore);
+    this.ctx.fillRect(30, hudY + 65, scoreProgress * 375, 20);
+    
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.font = 'bold 11px Inter';
+    const scoreText = this.dungeonLevel === 1 
+      ? `LEVEL 1 GOAL: ${this.levelScore} / ${this.targetScoreLevel1} Score to reach Level 2`
+      : this.dungeonLevel === 2
+      ? `LEVEL 2 GOAL: ${this.levelScore} / ${this.targetScoreLevel2} Score to reach Level 3`
+      : `LEVEL 3: DEFEAT THE BIG BOSS TO COMPLETE THE GAME!`;
+    this.ctx.fillText(scoreText, 36, hudY + 79);
+
+    // Gold & Total Score
+    this.ctx.font = 'bold 11px Inter';
     this.ctx.fillStyle = '#fbbf24';
-    this.ctx.fillText('💰 ' + this.gold + ' Gold', 265, hudY + 50);
+    this.ctx.fillText('💰 ' + this.gold + ' Gold', 230, hudY + 40);
+    this.ctx.fillText('⭐ Score: ' + this.score, 230, hudY + 57);
+
+    // Boss Bar at Top Center if Boss exists in Level 3
+    const boss = this.enemies.find(e => e.isBoss);
+    if (boss && this.dungeonLevel === 3) {
+      const bWidth = 460;
+      const bX = width / 2 - bWidth / 2;
+      const bY = 15;
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      this.ctx.fillRect(bX, bY, bWidth, 44);
+      this.ctx.strokeStyle = '#ef4444';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(bX, bY, bWidth, 44);
+
+      this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      this.ctx.fillRect(bX + 12, bY + 22, bWidth - 24, 15);
+      this.ctx.fillStyle = '#ef4444';
+      const bHpRatio = Math.max(0, boss.hp / boss.maxHp);
+      this.ctx.fillRect(bX + 12, bY + 22, (bWidth - 24) * bHpRatio, 15);
+
+      this.ctx.font = 'bold 12px Inter';
+      this.ctx.fillStyle = '#fbbf24';
+      this.ctx.fillText('👑 ABYSSAL DEMON OVERLORD (BOSS HP: ' + Math.round(boss.hp) + ' / ' + boss.maxHp + ')', bX + 20, bY + 16);
+    }
 
     // Minimap
     const mmSize = 120;
